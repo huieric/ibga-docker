@@ -1,4 +1,23 @@
 #!/bin/bash
 
-docker build --progress plain --rm -f ./dockerfile -t ibga ./
-docker images
+# Prepares Dockerfile and image files for later build step
+
+if [ $# -ne 2 ]; then
+	echo "Usage: ./build.sh <stable|latest> <version>"
+	exit 1
+fi
+
+CHANNEL=$1
+VERSION=$2
+
+if [[ "$CHANNEL" != "stable" ]] && [[ "$CHANNEL" != "latest" ]]; then
+	echo "'${CHANNEL}' must be either 'stable' or 'latest'"
+	exit 1
+fi
+
+OUTPUT_DIR="./$CHANNEL"
+rm -rf "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR"
+cp -r scripts/ "$OUTPUT_DIR"
+
+CHANNEL="$CHANNEL" VERSION="$VERSION" envsubst '$CHANNEL $VERSION' <"Dockerfile.template" >"$OUTPUT_DIR/Dockerfile"
