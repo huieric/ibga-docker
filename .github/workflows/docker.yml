@@ -1,0 +1,64 @@
+name: "Build and Publish Docker Images"
+
+on:
+  push:
+    tags:
+      - "docker-*"
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+# Triggers building, tagging and pushing of Docker image files
+# Uses tag name to extract channel (latest/stable)
+# e.g. docker-10.21.1p-latest -> latest
+
+jobs:
+  publish-docker:
+    name: Publish Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          # Checkout branch which triggered the action
+          ref: ${{ github.ref }}
+
+      - name: Extract Channel from workflow input, else tag name
+        id: channel
+        run: |
+          channel=$(cut -d - -f 3 <<< "${{ inputs.tag || github.ref_name }}")
+          echo "channel=$channel" >> $GITHUB_OUTPUT
+
+      - name: Generate image tags from push tags/workflow input
+        id: meta
+        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
+        with:
+          images: ghcr.io/huieric/ibkr
+          flavor: |
+            latest=false
+
+          # Tags for major, major.minor and stable/latest
+          # Extracted from either pushed tag, or inputs.tag if called from workflow
+          # https://github.com/docker/metadata-action/blob/8e5442c4ef9f78752691e2d8f8d19755c6f78e81/src/meta.ts#L230-L233
+          tags: |
+            type=match,pattern=docker-(\d+.\d+),group=1,value=${{ inputs.tag}}
+            type=match,pattern=docker-(\d+.\d+.\w+),group=1,value=${{ inputs.tag}}
+            type=match,pattern=docker-(\d+.\d+.\w+)+\-(stable|latest),group=2,value=${{ inputs.tag}}
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6
+        with:
+          # Build context
+          context: ${{ steps.channel.outputs.channel }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

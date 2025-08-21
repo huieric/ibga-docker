@@ -1,0 +1,102 @@
+name: Detect, Test and Publish IB Gateway/TWS Releases
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        required: true
+        type: string
+
+jobs:
+  check-new-version:
+    name: Check for new IBKR stable/latest versions
+    runs-on: ubuntu-latest
+    outputs:
+      build_version: ${{ steps.version.outputs.build_version }}
+      tag: docker-${{ steps.version.outputs.build_version }}-${{ inputs.channel }}
+      has_update: ${{ steps.check-update.outputs.has_update }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Get Latest IB Gateway Version
+        id: version
+        run: |
+          res=$(curl -s https://download2.interactivebrokers.com/installers/ibgateway/${{ inputs.channel }}-standalone/version.json)
+          build_version=$(grep -oP '(?<=buildVersion":")[^"]+' <<< "$res")
+          echo "build_version=$build_version" >> $GITHUB_OUTPUT
+
+      - name: Check Latest Version against Releases
+        id: check-update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release list | grep -qF '${{ steps.version.outputs.build_version }}-${{ inputs.channel }}'; then
+            echo "has_update=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_update=true" >> $GITHUB_OUTPUT
+          fi
+
+  test-and-commit:
+    name: Test version and commit
+    runs-on: ubuntu-latest
+    needs: check-new-version
+    if: needs.check-new-version.outputs.has_update == 'true'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Download IB Gateway
+        run: |
+          download_url='https://download2.interactivebrokers.com/installers/ibgateway/${{ inputs.channel }}-standalone/ibgateway-${{ inputs.channel }}-standalone-linux-x64.sh'
+          dest='ibgateway-${{ needs.check-new-version.outputs.build_version }}-standalone-linux-x64.sh'
+          curl -sSL "$download_url" --output "$dest"
+          sha256sum "$dest" > "${dest}.sha256"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create '${{ needs.check-new-version.outputs.build_version }}-${{ inputs.channel }}' \
+            -t 'ibgateway ${{ needs.check-new-version.outputs.build_version }}-${{ inputs.channel }}' \
+            ibgateway-*
+          rm ibgateway-*
+
+      - name: Update ${{ inputs.channel }}/
+        run: ./build.sh ${{ inputs.channel }} ${{ needs.check-new-version.outputs.build_version }}
+
+      # - name: Set up Python
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: "3.x"
+
+      # - name: Set up pdm
+      #   run: curl -sSL https://pdm-project.org/install-pdm.py | python3 -
+
+      # - name: Update and sync dependencies
+      #   run: pdm update -u
+
+      # - name: Build Docker image
+      #   run: |
+      #     docker build ${{ inputs.channel }} -t image
+
+      # - name: Test ${{ inputs.channel }}
+      #   run: ./start-docker.sh && docker ps && pdm run pytest
+      #   env:
+      #     USERNAME: ${{ secrets.USERNAME }}
+      #     PASSWORD: ${{ secrets.PASSWORD }}
+
+      - name: Commit with appropriate docker tag
+        uses: stefanzweifel/git-auto-commit-action@778341af668090896ca464160c2def5d1d1a3eb0 # v6
+        with:
+          commit_message: Update ${{ inputs.channel }} to ${{ needs.check-new-version.outputs.build_version }}
+
+          # By itself, will not trigger docker.yml action due to Github restrictions
+          tagging_message: ${{ needs.check-new-version.outputs.tag }}
+
+  build:
+    name: Trigger Docker Build Action
+    needs:
+      - test-and-commit
+      - check-new-version
+    uses: ./.github/workflows/docker.yml
+    with:
+      tag: ${{ needs.check-new-version.outputs.tag }}
