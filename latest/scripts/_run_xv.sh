@@ -53,7 +53,7 @@ function _run_vnc {
 
 function _run_novnc {
     CMD=$NOVNC_DIR/utils/novnc_proxy
-    ARGS="--listen 5800 --vnc localhost:5900"
+    ARGS="--listen 6080 --vnc localhost:5900"
     echo "<html><head><meta http-equiv=\"refresh\" content=\"0; URL=/vnc.html?autoconnect=true&reconnect=true\"/></head></html>" | sudo tee $NOVNC_DIR/index.html 1>/dev/null
     _info "• starting novnc ($CMD $ARGS) ...\n"
     sudo /sbin/start-stop-daemon --start --pidfile $NOVNC_PIDFILE --make-pidfile --background --exec $CMD -- $ARGS

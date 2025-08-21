@@ -44,6 +44,6 @@ ADD scripts /opt/ibga/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \
     sudo chmod a+rx /opt/ibga/*
-EXPOSE 4000/tcp
-EXPOSE 5800/tcp
+EXPOSE 8888/tcp
+EXPOSE 6080/tcp
 ENTRYPOINT /opt/ibga/manager.sh
