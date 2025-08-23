@@ -23,14 +23,14 @@ WORKDIR /opt
 RUN curl -Lk "https://github.com/novnc/noVNC/archive/refs/tags/v1.3.0.tar.gz" -o novnc.tar.gz && \
     tar xfz novnc.tar.gz && \
     rm novnc.tar.gz
+ENV JAUTO_VER=1.0.0
+RUN curl -Lk https://github.com/huieric/jauto/releases/download/v$JAUTO_VER/jauto-v$JAUTO_VER-linux-x86_64.tar.gz -o jauto.tar.gz && \
+    tar xfz jauto.tar.gz && \
+    rm jauto.tar.gz
+
 USER ibg
 WORKDIR /home/ibg
 COPY --from=util_build /tmp/utils/show_text /bin
-
-ENV JAUTO_VER=1.0.0
-RUN curl -Lk https://github.com/huieric/jauto/releases/download/v$JAUTO_VER/jauto-v$JAUTO_VER-linux-x86_64.tar.gz -o /tmp/jauto.tar.gz && \
-    tar xfz /tmp/jauto.tar.gz -C /opt
-
 ADD scripts /opt/ibga/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \
