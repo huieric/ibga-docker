@@ -26,7 +26,7 @@ RUN gcc show_text.c -O2 -lX11 -o show_text
 FROM debian:bookworm-slim
 USER root
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl sudo ed xvfb x11vnc x11-utils xdotool socat python3-websockify procps xfonts-scalable tzdata oathtool && \
+    apt-get install -y --no-install-recommends curl sudo ed xvfb x11vnc x11-utils xdotool socat python3-websockify python3-pip procps xfonts-scalable tzdata oathtool && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN useradd -ms /bin/bash -u 2000 ibg && \
@@ -47,13 +47,10 @@ RUN sudo chmod a+rx /bin/show_text && \
 EXPOSE 8888/tcp
 EXPOSE 6080/tcp
 
-# 拷贝健康检查脚本
 COPY healthcheck.py /usr/local/bin/healthcheck.py
 
-# 安装依赖（如果用 PDM，可以替换成 pdm install）
 RUN pip install --no-cache-dir ib-insync
 
-# 设置 HEALTHCHECK
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD python3 /usr/local/bin/healthcheck.py
 
 ENTRYPOINT /opt/ibga/manager.sh
