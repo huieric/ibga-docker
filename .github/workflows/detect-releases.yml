@@ -84,6 +84,13 @@ jobs:
       #     USERNAME: ${{ secrets.USERNAME }}
       #     PASSWORD: ${{ secrets.PASSWORD }}
 
+      - name: Pull latest master
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git fetch origin master
+          git rebase origin/master
+
       - name: Commit with appropriate docker tag
         uses: stefanzweifel/git-auto-commit-action@v6
         with:
