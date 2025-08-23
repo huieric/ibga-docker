@@ -39,6 +39,6 @@ EXPOSE 8888/tcp
 EXPOSE 6080/tcp
 
 COPY healthcheck.py /opt/healthcheck.py
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD /opt/venv/bin/python3 /opt/healthcheck.py
+HEALTHCHECK --interval=60s --timeout=10s --retries=1 CMD /opt/venv/bin/python3 /opt/healthcheck.py
 
 ENTRYPOINT /opt/ibga/manager.sh
