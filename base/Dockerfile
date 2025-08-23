@@ -1,18 +1,3 @@
-FROM eclipse-temurin:22-jammy AS jauto_build
-USER root
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl cmake gcc g++ make libc-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-ENV JAUTO_VER=1.0.0
-RUN curl -Lk https://github.com/heshiming/jauto/archive/refs/tags/v$JAUTO_VER.tar.gz -o /tmp/jauto.tar.gz
-WORKDIR /tmp
-RUN tar xfz jauto.tar.gz && \
-    mkdir jauto_build && \
-    cd jauto_build && \
-    cmake ../jauto-$JAUTO_VER && \
-    cmake --build .
-
 FROM debian:bookworm-slim AS util_build
 USER root
 RUN apt-get update && \
@@ -41,7 +26,11 @@ RUN curl -Lk "https://github.com/novnc/noVNC/archive/refs/tags/v1.3.0.tar.gz" -o
 USER ibg
 WORKDIR /home/ibg
 COPY --from=util_build /tmp/utils/show_text /bin
-COPY --from=jauto_build /tmp/jauto_build/jauto.so /opt
+
+ENV JAUTO_VER=1.0.0
+RUN curl -Lk https://github.com/huieric/jauto/releases/download/v$JAUTO_VER/jauto-v$JAUTO_VER-linux-x86_64.tar.gz -o /tmp/jauto.tar.gz && \
+    tar xfz /tmp/jauto.tar.gz -C /opt
+
 ADD scripts /opt/ibga/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \
