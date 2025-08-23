@@ -41,7 +41,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-new-version
     if: needs.check-new-version.outputs.has_update == 'true'
-    steps:      
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Download IB Gateway
         run: |
           download_url='https://download2.interactivebrokers.com/installers/ibgateway/${{ inputs.channel }}-standalone/ibgateway-${{ inputs.channel }}-standalone-linux-x64.sh'
@@ -58,31 +60,12 @@ jobs:
             ibgateway-*
           rm ibgateway-*
 
-      - uses: actions/checkout@v4
+      - name: Pull newest version
+        run: |
+          git pull origin master
 
       - name: Update ${{ inputs.channel }}/
-        run: ./build.sh ${{ inputs.channel }} ${{ needs.check-new-version.outputs.build_version }}
-
-      # - name: Set up Python
-      #   uses: actions/setup-python@v5
-      #   with:
-      #     python-version: "3.x"
-
-      # - name: Set up pdm
-      #   run: curl -sSL https://pdm-project.org/install-pdm.py | python3 -
-
-      # - name: Update and sync dependencies
-      #   run: pdm update -u
-
-      # - name: Build Docker image
-      #   run: |
-      #     docker build ${{ inputs.channel }} -t image
-
-      # - name: Test ${{ inputs.channel }}
-      #   run: ./start-docker.sh && docker ps && pdm run pytest
-      #   env:
-      #     USERNAME: ${{ secrets.USERNAME }}
-      #     PASSWORD: ${{ secrets.PASSWORD }}
+        run: ./build.sh ${{ inputs.channel }} ${{ needs.check-new-version.outputs.build_version }}   
 
       - name: Commit with appropriate docker tag
         uses: stefanzweifel/git-auto-commit-action@v6
