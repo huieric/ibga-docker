@@ -9,7 +9,7 @@ rm -f /tmp/.X0-lock
 setsid Xvnc -SecurityTypes None -AlwaysShared=1 -geometry 1920x1080 :0 &
 
 # Start noVNC server
-setsid ./noVNC/utils/novnc_proxy --vnc localhost:5900 &
+setsid /opt/noVNC/utils/novnc_proxy --vnc localhost:5900 &
 
 # Start openbox
 setsid openbox &
