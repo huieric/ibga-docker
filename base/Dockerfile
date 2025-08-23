@@ -26,7 +26,9 @@ RUN gcc show_text.c -O2 -lX11 -o show_text
 FROM debian:bookworm-slim
 USER root
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl sudo ed xvfb x11vnc x11-utils xdotool socat python3-websockify python3-pip procps xfonts-scalable tzdata oathtool && \
+    apt-get install -y --no-install-recommends curl sudo ed xvfb x11vnc x11-utils xdotool socat python3-websockify python3-venv procps xfonts-scalable tzdata oathtool && \
+    python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --no-cache-dir ib-insync && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN useradd -ms /bin/bash -u 2000 ibg && \
@@ -47,10 +49,7 @@ RUN sudo chmod a+rx /bin/show_text && \
 EXPOSE 8888/tcp
 EXPOSE 6080/tcp
 
-COPY healthcheck.py /usr/local/bin/healthcheck.py
-
-RUN pip install --no-cache-dir ib-insync
-
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD python3 /usr/local/bin/healthcheck.py
+COPY healthcheck.py /opt/healthcheck.py
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD /opt/venv/bin/python3 /opt/healthcheck.py
 
 ENTRYPOINT /opt/ibga/manager.sh
