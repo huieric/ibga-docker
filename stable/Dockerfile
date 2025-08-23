@@ -2,7 +2,7 @@ FROM ibkr:base
 
 ENV JAUTO_INPUT="/tmp/ibg-jauto.in"
 
-ARG INSTALL_FILENAME="ibgateway-${VERSION}-standalone-linux-x64.sh"
+ARG INSTALL_FILENAME="ibgateway-10.37.1k-standalone-linux-x64.sh"
 ARG JAUTO_PATCH="-agentpath:/opt/jauto.so=$JAUTO_INPUT"
 ARG OPTIONS_FILE="Jts/ibgateway/ibgateway.vmoptions"
 
