@@ -3,7 +3,7 @@ IBG_DIR="${IBG_DIR:-$HOME_DIR}"
 IBG_SETTINGS_DIR="${IBG_SETTINGS_DIR:-/home/ibg_settings}"
 IBG_PORT_INTERNAL="${IBG_PORT_INTERNAL:-9000}"
 IBG_PORT="${IBG_PORT:-8888}"
-IBG_EXEC=Jts/ibgateway/ibgateway
+IBG_EXEC=$(find $IBG_DIR -type f -name "ibgateway" -executable)
 IBG_DOWNLOAD_URL="${IBG_DOWNLOAD_URL:-https://download2.interactivebrokers.com/installers/ibgateway/latest-standalone/ibgateway-latest-standalone-linux-x64.sh}"
 IBGA_LOG_EXPORT_DIR="${IBGA_LOG_EXPORT_DIR:-$IBG_SETTINGS_DIR/exported_logs}"
 XVFB_PIDFILE=/var/run/xvfb.pid
@@ -13,5 +13,6 @@ NOVNC_DIR=$(find /opt -maxdepth 1 -type d -name "noVNC*")
 NOVNC_PIDFILE=/var/run/novnc.pid
 SOCAT_PIDFILE=/var/run/socat.pid
 DISPLAY=:0
+JAUTO_INPUT=/tmp/ibg-jauto.in
 
 export DISPLAY

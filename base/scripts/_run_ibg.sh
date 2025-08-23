@@ -943,9 +943,14 @@ MSG="---------------------------------------------------
         if [ "$IB_LOGINTYPE" == "Paper Trading" ]; then
             G_PAPER_TRADING_WARNING_DONE=0
         fi
+        JAUTO_PATCH="-agentpath:/opt/jauto.so=$JAUTO_INPUT"
+        OPTIONS_FILE=$(find $IBG_DIR -type f -name "ibgateway.vmoptions")
+        grep -qxF -- "$JAUTO_PATCH" $OPTIONS_FILE || (echo "$JAUTO_PATCH" >> $OPTIONS_FILE && \
+            _info "• ibgateway.vmoptions patched for jauto\n")
+
         _info "• time: $(date)\n"
         _info "• starting IB Gateway ...\n"
-        "$IBG_DIR/$IBG_EXEC" $IBG_ARGS &
+        "$IBG_EXEC" $IBG_ARGS &
         IBG_PID=$!
         _info "  pid: $IBG_PID\n"
 
