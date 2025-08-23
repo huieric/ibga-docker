@@ -13,6 +13,5 @@ NOVNC_DIR=$(find /opt -maxdepth 1 -type d -name "noVNC*")
 NOVNC_PIDFILE=/var/run/novnc.pid
 SOCAT_PIDFILE=/var/run/socat.pid
 DISPLAY=:0
-JAUTO_INPUT=/tmp/ibg-jauto.in
 
 export DISPLAY

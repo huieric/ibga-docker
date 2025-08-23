@@ -1,59 +1,25 @@
-FROM eclipse-temurin:22-jammy AS jauto_build
-USER root
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl cmake gcc g++ make libc-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-ENV JAUTO_VER=1.0.0
-RUN curl -Lk https://github.com/heshiming/jauto/archive/refs/tags/v$JAUTO_VER.tar.gz -o /tmp/jauto.tar.gz
-WORKDIR /tmp
-RUN tar xfz jauto.tar.gz && \
-    mkdir jauto_build && \
-    cd jauto_build && \
-    cmake ../jauto-$JAUTO_VER && \
-    cmake --build .
+FROM ibkr:base
 
-FROM debian:bookworm-slim AS util_build
-USER root
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libx11-dev libc-dev && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-ADD ../utils /tmp/utils
-WORKDIR /tmp/utils
-RUN gcc show_text.c -O2 -lX11 -o show_text
+ENV JAUTO_INPUT="/tmp/ibg-jauto.in"
 
-FROM debian:bookworm-slim
-USER root
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl sudo ed xvfb x11vnc x11-utils xdotool socat python3-websockify procps xfonts-scalable tzdata oathtool && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-RUN useradd -ms /bin/bash -u 2000 ibg && \
-    adduser ibg sudo && \
-    echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-WORKDIR /opt
-RUN curl -Lk "https://github.com/novnc/noVNC/archive/refs/tags/v1.3.0.tar.gz" -o novnc.tar.gz && \
-    tar xfz novnc.tar.gz && \
-    rm novnc.tar.gz
-USER ibg
+ARG INSTALL_FILENAME="ibgateway-${VERSION}-standalone-linux-x64.sh"
+ARG JAUTO_PATCH="-agentpath:/opt/jauto.so=$JAUTO_INPUT"
+ARG OPTIONS_FILE="Jts/ibgateway/ibgateway.vmoptions"
+
 WORKDIR /home/ibg
-COPY --from=util_build /tmp/utils/show_text /bin
-COPY --from=jauto_build /tmp/jauto_build/jauto.so /opt
-ADD ../scripts /opt/ibga/
-RUN sudo chmod a+rx /bin/show_text && \
-    sudo chmod a+rx /opt/jauto.so && \
-    sudo chmod a+rx /opt/ibga/*
-EXPOSE 8888/tcp
-EXPOSE 6080/tcp
 
-# 拷贝健康检查脚本
-COPY ../healthcheck.py /usr/local/bin/healthcheck.py
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y wget2
 
-# 安装依赖（如果用 PDM，可以替换成 pdm install）
-RUN pip install --no-cache-dir ib-insync
+# Fetch hashes
+RUN wget2 "https://github.com/extrange/ibkr-docker/releases/download/10.39.1h-latest/ibgateway-10.39.1h-standalone-linux-x64.sh.sha256" \
+    -O hash
 
-# 设置 HEALTHCHECK
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD python3 /usr/local/bin/healthcheck.py
-
-ENTRYPOINT /opt/ibga/manager.sh
+# Download IB Gateway (which contains TWS) and check hashes
+RUN wget2 "https://github.com/extrange/ibkr-docker/releases/download/10.39.1h-latest/ibgateway-10.39.1h-standalone-linux-x64.sh" \
+    -O "$INSTALL_FILENAME" \
+    && sha256sum -c hash \
+    && chmod +x "$INSTALL_FILENAME" \
+    && yes '' | "./$INSTALL_FILENAME"  \
+    && grep -qxF -- "$JAUTO_PATCH" $OPTIONS_FILE || echo "$JAUTO_PATCH" >> $OPTIONS_FILE \
+    && rm "$INSTALL_FILENAME"
