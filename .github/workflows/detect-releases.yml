@@ -60,16 +60,13 @@ jobs:
             ibgateway-*
           rm ibgateway-*
 
-      - name: Pull newest version
-        run: |
-          git pull origin master
-
-      - name: Update ${{ inputs.channel }}/
+      - name: Update ${{ inputs.channel }}/ and commit
         run: ./build.sh ${{ inputs.channel }} ${{ needs.check-new-version.outputs.build_version }}   
 
       - name: Commit with appropriate docker tag
         uses: stefanzweifel/git-auto-commit-action@v6
         with:
+          push_options: '--force'
           commit_message: Update ${{ inputs.channel }} to ${{ needs.check-new-version.outputs.build_version }}
 
           # By itself, will not trigger docker.yml action due to Github restrictions
