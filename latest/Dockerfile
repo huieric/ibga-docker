@@ -19,7 +19,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libx11-dev libc-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-ADD utils /tmp/utils
+ADD ../utils /tmp/utils
 WORKDIR /tmp/utils
 RUN gcc show_text.c -O2 -lX11 -o show_text
 
@@ -40,10 +40,20 @@ USER ibg
 WORKDIR /home/ibg
 COPY --from=util_build /tmp/utils/show_text /bin
 COPY --from=jauto_build /tmp/jauto_build/jauto.so /opt
-ADD scripts /opt/ibga/
+ADD ../scripts /opt/ibga/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \
     sudo chmod a+rx /opt/ibga/*
 EXPOSE 8888/tcp
 EXPOSE 6080/tcp
+
+# 拷贝健康检查脚本
+COPY ../healthcheck.py /usr/local/bin/healthcheck.py
+
+# 安装依赖（如果用 PDM，可以替换成 pdm install）
+RUN pip install --no-cache-dir ib-insync
+
+# 设置 HEALTHCHECK
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD python3 /usr/local/bin/healthcheck.py
+
 ENTRYPOINT /opt/ibga/manager.sh
