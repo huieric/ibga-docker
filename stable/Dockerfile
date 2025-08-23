@@ -6,11 +6,12 @@ ARG INSTALL_FILENAME="ibgateway-10.37.1k-standalone-linux-x64.sh"
 ARG JAUTO_PATCH="-agentpath:/opt/jauto.so=$JAUTO_INPUT"
 ARG OPTIONS_FILE="Jts/ibgateway/ibgateway.vmoptions"
 
-WORKDIR /home/ibg
-
+USER root
 RUN apt-get update && \
     apt-get install --no-install-recommends -y wget2
 
+USER ibg
+WORKDIR /home/ibg
 # Fetch hashes
 RUN wget2 "https://github.com/extrange/ibkr-docker/releases/download/10.37.1k-stable/ibgateway-10.37.1k-standalone-linux-x64.sh.sha256" \
     -O hash
