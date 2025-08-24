@@ -29,6 +29,7 @@ WORKDIR /opt
 RUN git clone --depth 1 https://github.com/novnc/noVNC.git && \
     chmod +x ./noVNC/utils/novnc_proxy && \
     git clone --depth 1 https://github.com/novnc/websockify.git ./noVNC/utils/websockify
+COPY index.html ./noVNC
 ENV JAUTO_VER=1.0.0
 RUN curl -Lk https://github.com/huieric/jauto/releases/download/v$JAUTO_VER/jauto-v$JAUTO_VER-linux-x86_64.tar.gz -o jauto.tar.gz && \
     tar xfz jauto.tar.gz && \
