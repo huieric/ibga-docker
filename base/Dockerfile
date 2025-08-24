@@ -4,8 +4,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libx11-dev libc-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-ADD utils /tmp/utils
-WORKDIR /tmp/utils
+ADD image-files/show_text.c /tmp
+WORKDIR /tmp
 RUN gcc show_text.c -O2 -lX11 -o show_text
 
 FROM debian:bookworm-slim
@@ -29,7 +29,7 @@ WORKDIR /opt
 RUN git clone --depth 1 https://github.com/novnc/noVNC.git && \
     chmod +x ./noVNC/utils/novnc_proxy && \
     git clone --depth 1 https://github.com/novnc/websockify.git ./noVNC/utils/websockify
-COPY index.html ./noVNC
+COPY image-files/index.html ./noVNC
 ENV JAUTO_VER=1.0.0
 RUN curl -Lk https://github.com/huieric/jauto/releases/download/v$JAUTO_VER/jauto-v$JAUTO_VER-linux-x86_64.tar.gz -o jauto.tar.gz && \
     tar xfz jauto.tar.gz && \
@@ -37,15 +37,15 @@ RUN curl -Lk https://github.com/huieric/jauto/releases/download/v$JAUTO_VER/jaut
 
 USER ibg
 WORKDIR /home/ibg
-COPY --from=util_build /tmp/utils/show_text /bin
-ADD scripts /opt/ibga/
+COPY --from=util_build /tmp/show_text /bin
+ADD image-files/scripts /opt/ibga/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \
     sudo chmod a+rx /opt/ibga/*
 EXPOSE 8888/tcp
 EXPOSE 6080/tcp
 
-COPY healthcheck.py /opt/healthcheck.py
+COPY image-files/healthcheck.py /opt/healthcheck.py
 HEALTHCHECK --interval=60s --timeout=10s --retries=1 --start-period=30s CMD /opt/venv/bin/python3 /opt/healthcheck.py
 
 ENTRYPOINT /opt/ibga/manager.sh
