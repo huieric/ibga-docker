@@ -12,7 +12,7 @@ FROM debian:bookworm-slim
 USER root
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl sudo ed xdotool socat python3-websockify python3-venv procps xfonts-scalable tzdata oathtool \
-    ca-certificates git libxtst6 libgtk-3-0 openbox tigervnc-standalone-server openjdk-11-jdk \
+    ca-certificates git libxtst6 libgtk-3-0 openbox tigervnc-standalone-server openjdk-17-jdk \
     # https://github.com/extrange/ibkr-docker/issues/74
     libasound2 \
     libnss3 \
