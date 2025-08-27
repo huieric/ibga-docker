@@ -3,6 +3,9 @@ name: Start detect-releases.yml
 # https://stackoverflow.com/questions/65384420/how-do-i-make-a-github-action-matrix-element-conditional
 
 on:
+  push:
+    branches:
+      - master
   schedule:
     - cron: "0 8 * * *" # 8AM UTC daily
 

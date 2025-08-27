@@ -40,7 +40,7 @@ jobs:
     name: Test version and commit
     runs-on: ubuntu-latest
     needs: check-new-version
-    if: needs.check-new-version.outputs.has_update == 'true'
+    if: needs.check-new-version.outputs.has_update == 'true' || github.actor != 'github-actions[bot]'
     steps:
       - uses: actions/checkout@v4
 
