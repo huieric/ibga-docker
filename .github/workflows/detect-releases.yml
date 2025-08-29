@@ -77,7 +77,7 @@ jobs:
     needs:
       - test-and-commit
       - check-new-version
-    if: always()
+    if: needs.check-new-version.outputs.has_update == 'true' || github.actor != 'github-actions[bot]'
     uses: ./.github/workflows/docker.yml
     with:
       tag: ${{ needs.check-new-version.outputs.tag }}
