@@ -72,12 +72,27 @@ jobs:
           # By itself, will not trigger docker.yml action due to Github restrictions
           tagging_message: ${{ needs.check-new-version.outputs.tag }}
 
-  build:
-    name: Trigger Docker Build Action
+  build-after-commit:
+    name: Trigger Docker Build After Commit
     needs:
       - test-and-commit
       - check-new-version
-    if: always() && (needs.check-new-version.outputs.has_update == 'true' || github.actor != 'github-actions[bot]')
+    # When a new IB release is detected we want to wait for test-and-commit
+    # to finish (it creates/releases files and updates the repo) before
+    # running the Docker build.
+    if: needs.check-new-version.outputs.has_update == 'true'
+    uses: ./.github/workflows/docker.yml
+    with:
+      tag: ${{ needs.check-new-version.outputs.tag }}
+
+  build-direct:
+    name: Trigger Docker Build Direct (no commit)
+    needs:
+      - check-new-version
+    # For manual pushes by a user (not the github-actions bot) we want to
+    # allow building directly even if test-and-commit was skipped. This
+    # branch runs only when there is NO new upstream IB release.
+    if: ((github.event_name == 'push' && github.actor != 'github-actions[bot]') || github.event_name == 'workflow_dispatch') && needs.check-new-version.outputs.has_update != 'true'
     uses: ./.github/workflows/docker.yml
     with:
       tag: ${{ needs.check-new-version.outputs.tag }}
