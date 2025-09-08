@@ -1,7 +1,7 @@
 HOME_DIR="/home/ibg"
 IBG_DIR="${IBG_DIR:-$HOME_DIR}"
 IBG_SETTINGS_DIR="${IBG_SETTINGS_DIR:-/home/ibg_settings}"
-IBG_PORT_INTERNAL="${IBG_PORT_INTERNAL:-9000}"
+IBG_PORT_INTERNAL="${IBG_PORT_INTERNAL:-4001}"
 IBG_PORT="${IBG_PORT:-8888}"
 IBG_EXEC=$(find $IBG_DIR -type f -name "ibgateway" -executable)
 IBG_DOWNLOAD_URL="${IBG_DOWNLOAD_URL:-https://download2.interactivebrokers.com/installers/ibgateway/latest-standalone/ibgateway-latest-standalone-linux-x64.sh}"

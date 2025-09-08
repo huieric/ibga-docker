@@ -42,8 +42,6 @@ ADD image-files/scripts /opt/ibga/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \
     sudo chmod a+rx /opt/ibga/*
-EXPOSE 8888/tcp
-EXPOSE 6080/tcp
 
 COPY image-files/healthcheck.py /opt/healthcheck.py
 # HEALTHCHECK --interval=60s --timeout=10s --retries=1 --start-period=30s CMD /opt/venv/bin/python3 /opt/healthcheck.py
