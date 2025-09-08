@@ -14,26 +14,6 @@
         overflow: hidden;
       }
     </style>
-    <script>
-      // 获取当前路径的最后一部分
-      function updateTitleBasedOnPath() {
-        const path = window.location.pathname;
-
-        // 判断并更新标题
-        if (path === '/data/') {
-          document.title = 'Data IBGateway';
-        } else if (path === '/trader/') {
-          document.title = 'Trader IBGateway';
-        } else if (path === '/sim-trader/') {
-          document.title = 'Sim-trader IBGateway';
-        } else {
-          document.title = 'IBGateway'; // 默认标题
-        }
-      }
-
-      // 页面加载完成时更新标题
-      window.onload = updateTitleBasedOnPath;
-    </script>
   </head>
   <body>
     <iframe src="vnc.html?autoconnect=true&resize=remote"></iframe>
