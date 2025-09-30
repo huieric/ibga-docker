@@ -19,7 +19,7 @@ RUN apt-get update && \
     libgbm1 \
     libnspr4 && \
     python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir ib-insync && \
+    /opt/venv/bin/pip install --no-cache-dir ib-insync pandas && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN useradd -ms /bin/bash -u 2000 ibg && \
