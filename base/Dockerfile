@@ -44,6 +44,7 @@ RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/ibga/*
 
 COPY image-files/healthcheck.py /opt/healthcheck.py
+COPY image-files/account_report.py /opt/account_report.py
 # HEALTHCHECK --interval=60s --timeout=10s --retries=1 --start-period=30s CMD /opt/venv/bin/python3 /opt/healthcheck.py
 
 ENTRYPOINT /opt/ibga/start.sh
