@@ -26,6 +26,9 @@ IBGA uses <a href="https://en.wikipedia.org/wiki/Environment_variable" target="_
 | <a name="IBGA_LOG_EXPORT_DIR">`IBGA_LOG_EXPORT_DIR`</a> | Specify the container-aspect directory to export logs into. When this variable is not set, IBGA will use a subdirectory of the settings dir `/home/ibg_settings/exported_logs`. |
 | <a name="IB_PREFER_IBKEY">`IB_PREFER_IBKEY`</a> | Set to "true" to allow automatic selection of "IB Key" when there are multiple choices of two-factor authentication devices. |
 | <a name="TOTP_KEY">`TOTP_KEY`</a> | [Automate TOTP (Mobile Authenticator App) login.](../faq.md#how-to-setup-totp-mobile-authenticator-app-automated-login) |
+| <a name="PASSKEY_ENABLED">`PASSKEY_ENABLED`</a> | Set to `1` to enable unattended passkey login via a software security key (see [Unattended Passkey Login](../faq.md#how-to-setup-unattended-passkey-software-security-key-login)). Defaults to `0` (off), so existing TOTP / IB Key setups are unaffected. |
+| <a name="IMPORT_PASSKEY_FILE">`IMPORT_PASSKEY_FILE`</a> | The in-container path of the mounted passkey private-key JSON, exported once out-of-band with [bitwarden-use](https://github.com/leeguooooo/bitwarden-use). Required when `PASSKEY_ENABLED=1`. |
+| <a name="PASSKEY_FILE">`PASSKEY_FILE`</a> | In-container path the authenticator reads the credential from. Defaults to `/home/ibg_settings/ibkr_passkey.json`. |
 
 Arguments marked with an asterisk symbol (\*) are required.
 

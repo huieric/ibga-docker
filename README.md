@@ -161,6 +161,7 @@ docker compose up
 - **自动安装 & 升级 IB Gateway**：首次运行自动下载，无需手动安装
 - **全自动登录**：用户名、密码、地区全部通过环境变量注入
 - **TOTP 自动化**（最新特性）：提供密钥后，6 位动态验证码由 `oathtool` 自动生成并填入，无需摸手机
+- **Passkey 无人值守登录**：通过软件虚拟安全密钥（`/dev/uhid`）自动应答 IBKR 的 Passkey 认证，无需实体 USB Key、无需人工操作（见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)）
 - **自动处理弹窗**：模拟交易确认框、选项对话框全部自动点击确认
 
 **当没有配置 TOTP 密钥时，登录后 noVNC 界面会显示如下 2FA 等待画面**，此时只需在手机上点一下"允许"即可：

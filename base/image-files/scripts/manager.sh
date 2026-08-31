@@ -35,5 +35,14 @@ MSG="------------------------------------------------
 "
 _info "$MSG"
 
+# --- software passkey login (see passkey/) ---
+# When PASSKEY_ENABLED=1, start the virtual CTAP2 authenticator and the
+# "Authenticate" clicker BEFORE IB Gateway launches so the UHID device is
+# registered before IBG enumerates HID devices.
+if [ "${PASSKEY_ENABLED:-0}" = "1" ]; then
+    _info "• starting software passkey login chain ...\n"
+    setsid /opt/ibga/passkey/start_passkey.sh > >(tee -a "$IBGA_LOG_EXPORT_DIR/passkey_$(date +%Y%m%d).log") 2>&1 &
+fi
+
 _run_socat
 _run_ibg

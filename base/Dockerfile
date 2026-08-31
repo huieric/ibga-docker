@@ -19,7 +19,7 @@ RUN apt-get update && \
     libgbm1 \
     libnspr4 && \
     python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir ib-insync pandas && \
+    /opt/venv/bin/pip install --no-cache-dir ib-insync pandas fido2 cbor2 cryptography && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN useradd -ms /bin/bash -u 2000 ibg && \
@@ -39,9 +39,14 @@ USER ibg
 WORKDIR /home/ibg
 COPY --from=util_build /tmp/show_text /bin
 ADD image-files/scripts /opt/ibga/
+# --- software passkey login (see passkey/) ---
+# The virtual CTAP2 authenticator and clicker live in /opt/ibga/passkey and
+# are driven by start_passkey.sh (launched from manager.sh when PASSKEY_ENABLED=1).
+ADD image-files/passkey /opt/ibga/passkey/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \
-    sudo chmod a+rx /opt/ibga/*
+    sudo chmod a+rx /opt/ibga/* && \
+    sudo chmod a+rx /opt/ibga/passkey/*.sh
 
 COPY image-files/healthcheck.py /opt/healthcheck.py
 COPY image-files/account_report.py /opt/account_report.py

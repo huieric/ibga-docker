@@ -159,4 +159,84 @@ And IBGA will automatically generate and enter the 6-digit passcode for you. Gen
 
 Note that if your account is already using IB Key or Printed/Digital Keycode Card, there is currently no way to switch to Mobile Authenticator App (as of November 2024).
 
+---
+
+## How to setup unattended passkey (software security key) login?
+
+Interactive Brokers now mandates **passkey** authentication for many accounts; the
+TOTP / IB Key flows that IBGA could automate no longer apply. IBGA supports a
+**software passkey** solution that keeps login fully headless: a virtual
+FIDO2/CTAP2 authenticator runs inside the container, emulates a USB security key
+through the Linux `/dev/uhid` interface, and automatically answers IB Gateway's
+"Use your Passkey device" prompt. No physical USB key, no browser, no manual
+interaction is required.
+
+How it works inside the container:
+
+1. `start_passkey.sh` copies the mounted private-key JSON into place.
+2. `virtual_authenticator.py` presents a virtual security key to IB Gateway and
+   signs the WebAuthn challenge with the imported P-256 key.
+3. `click_authenticate.sh` clicks the "Authenticate" button via `xdotool`.
+
+### 1. Export the passkey private key (once, out-of-band)
+
+On a machine where you can interact with a terminal (this step is interactive and
+is done **outside** the container):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/leeguooooo/bitwarden-use/main/install.sh | sh
+bwu config set email <your-bitwarden-email>
+bwu unlock           # prompts for your master password
+bwu fido2 list       # find the IBKR passkey entry
+bwu fido2 get "<entry-name>"   # shows privateKeyPem, credentialId, rpId, userHandle
+```
+
+Assemble the output into `ibkr_passkey.json`:
+
+```json
+{
+  "name": "<entry-name>",
+  "credentialId": "<base64url>",
+  "rpId": "interactivebrokers.com.hk",
+  "userHandle": "<base64url>",
+  "privateKeyPem": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+}
+```
+
+The key material does not rotate, so you only need to do this once.
+
+### 2. Mount the credential and enable the feature
+
+`docker-compose.yml`:
+
+```yaml
+version: '2'
+services:
+  my-ibga:
+    image: heshiming/ibga
+    devices:
+      - /dev/uhid:/dev/uhid
+    environment:
+      - PASSKEY_ENABLED=1
+      - IMPORT_PASSKEY_FILE=/secrets/ibkr_passkey.json
+      # ... other IB_* variables ...
+    volumes:
+      - ./ibkr_passkey.json:/secrets/ibkr_passkey.json:ro
+      - ./run/program:/home/ibg
+      - ./run/settings:/home/ibg_settings
+```
+
+> **`/dev/uhid` requirement**: the virtual security key is registered through
+> the Linux UHID kernel interface. The host kernel must have UHID support
+> (`CONFIG_UHID`); on some distributions (e.g. Ubuntu on AWS) this is provided
+> by the `linux-modules-extra` package. The container must be granted access via
+> the `devices` entry above.
+
+### 3. Verify
+
+Start the container and open the noVNC view. IB Gateway should log in
+automatically, with the passkey prompt answered by the virtual authenticator.
+The container log shows `[start-passkey] ...` and
+`[virtual-authenticator] Loaded passkey for ...` lines when everything works.
+
 
