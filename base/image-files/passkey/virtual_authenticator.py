@@ -521,19 +521,24 @@ class VirtualAuthenticator:
                 self._send_ctap_status(cid, CTAP2_ERR_NO_CREDENTIALS)
                 return
 
-        # Build authenticator data (CTAP2 §6.1.2)
+        # Build authenticator data (CTAP2 §6.2). For getAssertion the
+        # authData is exactly rpIdHash(32) | flags(1) | signCount(4) — 37
+        # bytes. flags must NOT carry AT (0x40) and authData must NOT include
+        # credential data (that is makeCredential-only); including it would
+        # produce an invalid signature over authData||clientDataHash.
         rp_id_hash = webauthn.sha256(rp_id.encode("utf-8"))
-        flags = 0x41  # UP (0x01) | AT (0x40)
+        flags = 0x01  # UP (user presence, emulated by the click)
         counter = credential.increment_counter().to_bytes(4, "big")
-        cred_data = self._build_credential_data(credential)
-        auth_data = rp_id_hash + bytes([flags]) + counter + cred_data
+        auth_data = rp_id_hash + bytes([flags]) + counter
 
-        # Signature over auth_data || clientDataHash (§6.1.2)
+        # Signature over auth_data || clientDataHash (§6.2)
         signature = self._sign_es256(credential.private_key,
                                      auth_data + client_data_hash)
 
         response = {
-            1: credential.credential_id,
+            # CTAP2 §6.2: key 1 is a PublicKeyCredentialDescriptor map, not
+            # the raw credential id bytes.
+            1: {"id": credential.credential_id, "type": "public-key"},
             2: auth_data,
             3: signature,
             4: {"id": credential.user_handle},
