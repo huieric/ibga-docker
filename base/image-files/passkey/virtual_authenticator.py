@@ -369,9 +369,7 @@ class VirtualAuthenticator:
                 if len(raw) < 4:
                     continue
                 ev_type = struct.unpack("<I", raw[:4])[0]
-                if ev_type == UHID_INIT:
-                    pass
-                elif ev_type == UHID_START:
+                if ev_type == UHID_START:
                     self._maybe_in(raw)
                 elif ev_type == UHID_OUTPUT:
                     self._handle_output(raw)
@@ -379,6 +377,8 @@ class VirtualAuthenticator:
                     pass
                 elif ev_type == UHID_CLOSE:
                     pass
+                # UHID_STOP / UHID_CREATE2 / UHID_GET_REPORT / UHID_SET_REPORT
+                # and other events need no special handling here.
         except BlockingIOError:
             pass
 
