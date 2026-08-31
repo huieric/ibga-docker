@@ -18,9 +18,9 @@ If you are new to docker, images and containers, here is a primer on each concep
 
 ## Obtaining the IBGA Image From GitHub Container Registry
 
-The IBGA docker image is located at <a href="https://github.com/huieric/ibga-docker/pkgs/container/ibga-docker" target="_blank">ghcr.io/huieric/ibga-docker</a>. To obtain the image, use the following command:
+The IBGA docker image is located at <a href="https://github.com/huieric/ibga-docker/pkgs/container/ibkr" target="_blank">ghcr.io/huieric/ibkr</a>. To obtain the image, use the following command:
 
-    $ sudo docker pull ghcr.io/huieric/ibga-docker
+    $ sudo docker pull ghcr.io/huieric/ibkr
 
 However, if you plan to follow our [Docker Compose flavored configuration](configuring.md), you don't need this command to pull it. Docker Compose will pull it automatically when you [launch the container](running.md).
 

@@ -17,7 +17,7 @@ This section discusses the basics of a Docker Compose configuration, including m
 * `version: '2'` on the first line, don't change that
 * `services:` on the second
 * `my-ibga:` is the name of the service (also used as an auto-generated container name), which is used as an identifier of the instance within the docker context. If you plan on running multiple instances, give each a clear name such as `my-roth-account`. Note there are 2 spaces before the name, indicating that the `my-ibga` node is a child node under `services`, by YAML format.
-* `image: ghcr.io/huieric/ibga-docker` means that the container will use the IBGA Docker image, which can be [pulled automatically from the GitHub Container Registry](docker-image.md#obtaining-the-ibga-image-from-github-container-registry) or [built locally](docker-image.md#building-the-image). Note the four spaces ahead of `image` means that the `image` node is under `my-ibga`.
+* `image: ghcr.io/huieric/ibkr` means that the container will use the IBGA Docker image, which can be [pulled automatically from the GitHub Container Registry](docker-image.md#obtaining-the-ibga-image-from-github-container-registry) or [built locally](docker-image.md#building-the-image). Note the four spaces ahead of `image` means that the `image` node is under `my-ibga`.
 * `restart: unless-stopped` means unless you manually stop the container, Docker will always try to start it up. It applies to both instances being stopped due to a reboot or crash.
 
 ## Environment Variables

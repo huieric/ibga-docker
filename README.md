@@ -83,7 +83,7 @@ ibga-docker 用 Docker 容器 + 一套精巧的自动化脚本，把以上所有
 version: '2'
 services:
   my-ibga:
-    image: ghcr.io/huieric/ibga-docker
+    image: ghcr.io/huieric/ibkr
     restart: unless-stopped        # 崩溃自动重启
     environment:
       - TERM=xterm
@@ -202,8 +202,8 @@ docker compose up
 
 | 通道 | 镜像 tag | 适合场景 | 特点 |
 |---|---|---|---|
-| **stable** | `ghcr.io/huieric/ibga-docker:stable` | 生产实盘交易 | IBKR 充分测试过的版本，稳定优先 |
-| **latest** | `ghcr.io/huieric/ibga-docker:latest` | 测试/模拟交易 | 跟进 IBKR 最新功能，第一时间获得修复 |
+| **stable** | `ghcr.io/huieric/ibkr:stable` | 生产实盘交易 | IBKR 充分测试过的版本，稳定优先 |
+| **latest** | `ghcr.io/huieric/ibkr:latest` | 测试/模拟交易 | 跟进 IBKR 最新功能，第一时间获得修复 |
 
 ### 自动化发布历史
 

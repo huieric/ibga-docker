@@ -91,7 +91,7 @@ First, log exporting is configured using the [`IBGA_EXPORT_LOGS`](references/con
     version: '2'
     services:
       my-ibga:
-        image: ghcr.io/huieric/ibga-docker
+        image: ghcr.io/huieric/ibkr
         environment:
           ...
           - IBGA_EXPORT_LOGS=true
@@ -150,7 +150,7 @@ The part marked as "X" in the above content is your 32-character secret key (gen
 
     services:
       my-ibga:
-        image: ghcr.io/huieric/ibga-docker
+        image: ghcr.io/huieric/ibkr
         environment:
           ...
           - TOTP_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
@@ -213,7 +213,7 @@ The key material does not rotate, so you only need to do this once.
 version: '2'
 services:
   my-ibga:
-    image: ghcr.io/huieric/ibga-docker
+    image: ghcr.io/huieric/ibkr
     devices:
       - /dev/uhid:/dev/uhid
     environment:
