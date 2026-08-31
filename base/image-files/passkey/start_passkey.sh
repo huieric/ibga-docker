@@ -59,6 +59,40 @@ log "Starting virtual CTAP2 authenticator..."
 AUTH_PID=$!
 log "Virtual authenticator PID=$AUTH_PID"
 
+# 3b. 把虚拟密钥的 hidraw 节点补到容器内
+#
+#     认证器向 /dev/uhid 写入 CREATE2 后，内核会分配一个 hidraw 设备并在
+#     *宿主机* 上生成 /dev/hidrawN 节点；但容器的 /dev 是独立 tmpfs，看不到
+#     这个新节点，导致 IB Gateway（扫描 /dev/hidraw*）找不到安全密钥。
+#
+#     这里从 /sys/class/hidraw（容器与宿主机共享的内核视图）找到名为
+#     "softpasskey" 的 hidraw 设备，用 mknod 在容器内补出 /dev/hidrawN。
+(
+    for _ in $(seq 1 30); do
+        for d in /sys/class/hidraw/hidraw*; do
+            [ -e "$d" ] || continue
+            HRN="$(basename "$d")"
+            FOUND=""
+            # 优先匹配 device/name，其次匹配 device/uevent 里的 HID_NAME
+            if [ -r "$d/device/name" ] && [ "$(cat "$d/device/name" 2>/dev/null)" = "softpasskey" ]; then
+                FOUND=1
+            elif [ -r "$d/device/uevent" ] && grep -qi 'HID_NAME=softpasskey' "$d/device/uevent" 2>/dev/null; then
+                FOUND=1
+            fi
+            if [ -n "$FOUND" ]; then
+                MAJMIN="$(cat "$d/dev" 2>/dev/null)"
+                if [ -n "$MAJMIN" ] && [ ! -e "/dev/$HRN" ]; then
+                    sudo mknod -m 666 "/dev/$HRN" c "${MAJMIN%%:*}" "${MAJMIN##*:}" \
+                        && log "Created /dev/$HRN (${MAJMIN}) so IB Gateway can see the virtual security key."
+                fi
+                break 2
+            fi
+        done
+        sleep 1
+    done
+) &
+HIDNOD_PID=$!
+
 # 4. 启动 Authenticate 点击脚本（后台）
 log "Starting Authenticate clicker..."
 bash "$CLICK_SCRIPT" &
@@ -76,5 +110,5 @@ log "Clicker PID=$CLICK_PID"
 RETRY_PID=$!
 
 # 6. 保持前台，转发信号（Ctrl+C / SIGTERM 时优雅关闭子进程）
-trap 'kill $AUTH_PID $CLICK_PID $RETRY_PID 2>/dev/null || true' INT TERM
+trap 'kill $AUTH_PID $CLICK_PID $RETRY_PID $HIDNOD_PID 2>/dev/null || true' INT TERM
 wait "$AUTH_PID"

@@ -216,6 +216,12 @@ services:
     image: ghcr.io/huieric/ibkr
     devices:
       - /dev/uhid:/dev/uhid
+    # Allow the container to access the /dev/hidrawN node that the virtual
+    # security key appears as (hidraw major = 234). Without this, Docker's
+    # device cgroup blocks I/O on the hidraw device even though the node
+    # exists inside the container.
+    device_cgroup_rules:
+      - 'c 234:* rwm'
     environment:
       - PASSKEY_ENABLED=1
       - IMPORT_PASSKEY_FILE=/secrets/ibkr_passkey.json
@@ -231,6 +237,13 @@ services:
 > (`CONFIG_UHID`); on some distributions (e.g. Ubuntu on AWS) this is provided
 > by the `linux-modules-extra` package. The container must be granted access via
 > the `devices` entry above.
+>
+> **`/dev/hidrawN` requirement**: when the authenticator registers the key, the
+> kernel exposes it as a HID device (`/dev/hidrawN`, major 234). Because the
+> container's `/dev` is a private tmpfs, `start_passkey.sh` automatically
+> creates the matching node inside the container via `mknod`; the
+> `device_cgroup_rules` entry above is what actually permits I/O on it. For
+> `docker run`, use `--device-cgroup-rule 'c 234:* rwm'`.
 
 ### 3. Verify
 
@@ -238,5 +251,8 @@ Start the container and open the noVNC view. IB Gateway should log in
 automatically, with the passkey prompt answered by the virtual authenticator.
 The container log shows `[start-passkey] ...` and
 `[virtual-authenticator] Loaded passkey for ...` lines when everything works.
+After startup you can confirm the virtual key is visible to the container with
+`docker exec <container> ls -l /dev/hidraw*` — you should see a node such as
+`/dev/hidrawN` (created by the authenticator).
 
 
