@@ -350,7 +350,9 @@ ib.connect('127.0.0.1', 4000, clientId=1)
 BWU_INSTALL_DIR=/usr/local/bin ./build-bwu.sh # 或指定安装目录
 ```
 
-脚本会自动安装 Rust（如缺失）、克隆源码、归一化 `Cargo.toml`（edition 2026 → 2024）、编译 `bitwarden-use` + `bitwarden-use-agent`，并输出二进制的最高 GLIBC 依赖版本供核对。
+脚本会自动安装 Rust（如缺失）、克隆源码、归一化 `Cargo.toml`（edition 2026 → 2024）、**打上「新设备验证」补丁**、编译 `bitwarden-use` + `bitwarden-use-agent`，并输出二进制的最高 GLIBC 依赖版本供核对。
+
+> **关于「新设备验证」**：Bitwarden 对来自新 IP / 新设备的登录会要求邮箱验证（返回 `New device verification required`），而上游 `bitwarden-use` 未实现该流程，直接报 `api request returned error: 400`。本脚本内置的补丁已修复此问题——首次在新机器上 `bwu unlock` 时，输入主密码后会再提示「Enter the verification code sent to your email.」，填入邮件里的验证码即可完成登录，之后会记住设备不再重复要求。
 
 可选环境变量：`BWU_REPO`（上游仓库地址）、`BWU_REF`（分支/标签）、`BWU_INSTALL_DIR`（安装目录）、`BWU_KEEP_SRC=1`（保留源码目录）。
 
