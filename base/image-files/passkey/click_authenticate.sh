@@ -1,74 +1,125 @@
 #!/usr/bin/env bash
-# click_authenticate.sh — 自动点击 IB Gateway 的 "Use your Passkey device" → Authenticate
+# click_authenticate.sh — 自动点击 IB Gateway 的 passkey "Authenticate" 按钮
 #
 # 背景：
-#   IB Gateway 登录时，若账号开启了 passkey，会弹出一个原生对话框：
-#     "Use your Passkey device"  +  [Authenticate >] 按钮
-#   IBC（IBCAlpha）目前不识别这个窗口（它只处理 Second Factor Authentication
-#   与 Security Code Card），所以必须由外部脚本代为点击 Authenticate。
+#   IB Gateway 登录时，若账号开启了 passkey，输入账号密码并点击 Log In 后，
+#   会弹出 passkey 验证对话框（"Use your Passkey device" → Authenticate）。
+#   这个对话框的 X11 窗口标题通常仍是 "IB Gateway" / "Two Factor
+#   Authentication" 之类，并不包含 "passkey"/"authenticate" 字样，因此
+#   不能用 `xdotool search --name` 按标题匹配。
 #
 # 思路：
-#   用 xdotool 在 noVNC 的 X 显示上循环扫描窗口标题。当出现包含
-#   "Passkey" / "Authenticate" 字样的窗口时，把焦点给它，然后通过键盘
-#   导航（Tab 移动到按钮 + Enter / 或直接匹配按钮文字）触发点击。
+#   改用与 ibga 其它自动化一致的 JAuto 机制（JVMTI agent）：枚举 Swing UI
+#   组件，找到文本含 "Authenticate" 的 JButton，再用 xdotool 点击其坐标
+#   （与 _run_ibg.sh 中点击 "Log In" / "OK" 按钮是同一套成熟做法）。
 #
-#   由于点击之后虚拟认证器（passkey/virtual_authenticator.py）会立即完成
-#   CTAP2 签名应答，本脚本只需保证 "Authenticate" 被点到即可，无需人工干预。
+#   点击之后虚拟认证器（passkey/virtual_authenticator.py）会立即完成 CTAP2
+#   签名应答，本脚本只需保证 "Authenticate" 被点到即可。
 #
 # 依赖：
-#   xdotool（Dockerfile.template 中已安装）
-#
-# 用法：
-#   click_authenticate.sh [--timeout <秒>] [--interval <秒>]
-#
-# 默认超时 600 秒（IB Gateway 登录窗口期内足够），默认扫描间隔 2 秒。
+#   - JAuto 已随 IB Gateway 启动（由 _run_ibg.sh 注入 -agentpath）
+#   - xdotool（base 镜像已内置）
 #
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMEOUT="${PASSKEY_CLICK_TIMEOUT:-900}"
 INTERVAL="${PASSKEY_CLICK_INTERVAL:-2}"
 DISPLAY="${DISPLAY:-:0}"
-
-start_epoch="$(date +%s)"
+export DISPLAY
 
 log() { echo "[click-authenticate] $*" >&2; }
 
-log "Monitoring for IB Gateway passkey prompt on DISPLAY=$DISPLAY ..."
+# 复用 ibga 的 jauto / 工具函数（位于 /opt/ibga/）
+for f in _env.sh _utils.sh _jauto.sh; do
+    if [ -f "$SCRIPT_DIR/../$f" ]; then
+        # shellcheck disable=SC1090
+        source "$SCRIPT_DIR/../$f"
+    fi
+done
+
+HAS_JAUTO=0
+if declare -F _call_jauto >/dev/null 2>&1 && \
+   declare -F _jauto_parse_props >/dev/null 2>&1; then
+    HAS_JAUTO=1
+fi
+
+log "Monitoring for passkey Authenticate button on DISPLAY=$DISPLAY (jauto=$HAS_JAUTO) ..."
+
+start_epoch="$(date +%s)"
+
+# 在一段 jauto 组件输出里找 text 含 "Authenticate" 的 JButton 并点击。
+# 返回 0 表示已点击，1 表示没找到。
+try_click_from_components() {
+    local OUTPUT="$1"
+    local COMPONENT BX BY
+    while IFS= read -r COMPONENT; do
+        [ -z "$COMPONENT" ] && continue
+        # 与 _login_click 相同的解析方式：不带引号传入，回填到关联数组
+        local -A P="$(_jauto_parse_props $COMPONENT)"
+        if [ "${P[F1]:-}" = "javax.swing.JButton" ] && \
+           [[ "${P[text]:-}" == *uthenticate* ]]; then
+            BX="${P[mx]:-0}"
+            BY="${P[my]:-0}"
+            if [ "$BX" != "0" ] || [ "$BY" != "0" ]; then
+                log "Found Authenticate button at ($BX,$BY); clicking."
+                xdotool mousemove "$BX" "$BY" click 1
+                return 0
+            fi
+        fi
+    done <<< "$OUTPUT"
+    return 1
+}
+
+# 用 xdotool 找含 passkey/authenticate 标题的窗口（兜底）
+click_via_xdotool() {
+    local win_ids first_win
+    win_ids="$(xdotool search --name -i 'passkey' 2>/dev/null; \
+               xdotool search --name -i 'authenticate' 2>/dev/null)"
+    [ -z "$win_ids" ] && return 1
+    first_win="$(echo "$win_ids" | head -1 | tr -d '[:space:]')"
+    [ -z "$first_win" ] && return 1
+    log "Found passkey window (id=$first_win); clicking."
+    xdotool windowactivate --sync "$first_win" 2>/dev/null || true
+    xdotool windowfocus "$first_win" 2>/dev/null || true
+    xdotool key --window "$first_win" Tab 2>/dev/null || true
+    xdotool key --window "$first_win" Return 2>/dev/null || true
+    return 0
+}
 
 while :; do
     now="$(date +%s)"
     if [ "$(( now - start_epoch ))" -ge "$TIMEOUT" ]; then
-        log "Timed out after ${TIMEOUT}s without detecting a passkey prompt."
+        log "Timed out after ${TIMEOUT}s without detecting the passkey prompt."
         exit 1
     fi
 
-    # 查找标题包含 passkey 关键词的窗口（IB Gateway 用 "Passkey" / "Authenticate"）
-    # xdotool 的 search 支持正则式 `--name`。
-    win_ids="$(xdotool search --name -i 'passkey' 2>/dev/null; \
-               xdotool search --name -i 'authenticate' 2>/dev/null)"
+    CLICKED=0
 
-    if [ -n "$win_ids" ]; then
-        first_win="$(echo "$win_ids" | head -1 | tr -d '[:space:]')"
-        if [ -n "$first_win" ]; then
-            log "Found passkey window (id=$first_win); clicking Authenticate."
-            # 激活并聚焦该窗口，确保后续键盘事件送到正确的窗口
-            xdotool windowactivate --sync "$first_win" 2>/dev/null || true
-            xdotool windowfocus "$first_win" 2>/dev/null || true
+    if [ "$HAS_JAUTO" = "1" ]; then
+        for q in \
+            "list_ui_components?window_type=dialog" \
+            "list_ui_components?window_class=twslaunch.jauthentication&window_type=dialog" \
+            "list_ui_components?window_class=ibgateway"; do
+            OUT="$(_call_jauto "$q" 2>/dev/null || true)"
+            if [ -n "$OUT" ] && [ "$OUT" != "none" ] && [ "$OUT" != "!timeout!" ]; then
+                if try_click_from_components "$OUT"; then
+                    CLICKED=1
+                    break
+                fi
+            fi
+        done
+    fi
 
-            # 用 Tab+Enter 触发 Authenticate。窗口里有若干控件，
-            # 连续 Tab 键聚焦按钮，再按 Enter 触发。
-            # 为稳妥起见做三次 Tab -> Enter 尝试（按钮位置不定的兜底）。
-            xdotool key --window "$first_win" Tab 2>/dev/null || true
-            xdotool key --window "$first_win" Return 2>/dev/null || true
-            sleep 1
-            xdotool key --window "$first_win" Tab 2>/dev/null || true
-            xdotool key --window "$first_win" Return 2>/dev/null || true
-            sleep 1
-            xdotool key --window "$first_win" Tab 2>/dev/null || true
-            xdotool key --window "$first_win" Return 2>/dev/null || true
-
-            log "Authenticate clicked (attempted). Continuing to monitor for completion..."
+    if [ "$CLICKED" != "1" ]; then
+        if click_via_xdotool; then
+            CLICKED=1
         fi
+    fi
+
+    if [ "$CLICKED" = "1" ]; then
+        log "Authenticate clicked; continuing to monitor for any re-prompt."
+        sleep 3
     fi
 
     sleep "$INTERVAL"
