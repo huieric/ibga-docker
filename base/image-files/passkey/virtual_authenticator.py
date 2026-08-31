@@ -420,16 +420,24 @@ class VirtualAuthenticator:
 
     def _on_init(self, cid, payload):
         # CTAPHID_INIT request payload: 8-byte nonce, then optional channels.
-        # We respond with: nonce(8) | assigned CID(4) | protocol(1)=2 |
-        # version(1)=5 | major(1)=1 | minor(1)=0 | build(1)=0 | caps(1)
+        # Response (after nonce + CID), per CTAPHID spec §8.1.9.1.3, is exactly
+        # 5 bytes: PROTOCOL(1)=2 | MAJOR(1) | MINOR(1) | BUILD(1) | CAPABILITIES(1).
+        # An off-by-one here (6 bytes) shifts CAPABILITIES out of the parsed
+        # region and makes the host read caps=0, i.e. "no CBOR support", which
+        # causes IB Gateway to ignore the key.
         nonce = payload[:8]
         # Broadcast CID (0xffffffff) is used for the INIT request.
         assigned = bytes([0x00, 0x00, 0x00, 0x01])
         # Respond on the broadcast CID per spec (init always uses 0xFFFFFFFF).
         data = nonce + assigned
-        data += bytes([0x02, 0x05, 0x01, 0x00, 0x00,
-                       CAPABILITY_CBOR | CAPABILITY_NMSG])
+        data += bytes([0x02,  # PROTOCOL version
+                       0x05,  # MAJOR
+                       0x01,  # MINOR
+                       0x00,  # BUILD
+                       CAPABILITY_CBOR | CAPABILITY_NMSG])  # CAPABILITIES
         data += b"\x00" * (57 - len(data))
+        print("[virtual-authenticator] CTAPHID INIT answered (caps=0x%02x)"
+              % (CAPABILITY_CBOR | CAPABILITY_NMSG), flush=True)
         self._send(data, CTAPHID_INIT, cid=b"\xff\xff\xff\xff")
         # remember the assigned channel
         self.cids[assigned] = assigned
