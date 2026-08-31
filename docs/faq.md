@@ -217,11 +217,11 @@ services:
     devices:
       - /dev/uhid:/dev/uhid
     # Allow the container to access the /dev/hidrawN node that the virtual
-    # security key appears as (hidraw major = 234). Without this, Docker's
-    # device cgroup blocks I/O on the hidraw device even though the node
-    # exists inside the container.
+    # security key appears as. The hidraw MAJOR is assigned dynamically by
+    # the kernel (e.g. 234 on some kernels, 239 on AWS 6.8 kernels) — see the
+    # note below on how to find the correct value.
     device_cgroup_rules:
-      - 'c 234:* rwm'
+      - 'c 239:* rwm'
     environment:
       - PASSKEY_ENABLED=1
       - IMPORT_PASSKEY_FILE=/secrets/ibkr_passkey.json
@@ -239,11 +239,21 @@ services:
 > the `devices` entry above.
 >
 > **`/dev/hidrawN` requirement**: when the authenticator registers the key, the
-> kernel exposes it as a HID device (`/dev/hidrawN`, major 234). Because the
-> container's `/dev` is a private tmpfs, `start_passkey.sh` automatically
-> creates the matching node inside the container via `mknod`; the
-> `device_cgroup_rules` entry above is what actually permits I/O on it. For
-> `docker run`, use `--device-cgroup-rule 'c 234:* rwm'`.
+> kernel exposes it as a HID device (`/dev/hidrawN`). Because the container's
+> `/dev` is a private tmpfs, `start_passkey.sh` automatically creates the
+> matching node inside the container via `mknod`. Docker's device cgroup blocks
+> I/O on that node unless a `device_cgroup_rules` entry permits its major
+> number. For `docker run`, use `--device-cgroup-rule 'c <major>:* rwm'`.
+>
+> **How to find the correct major**: hidraw's major number is allocated
+> dynamically and differs per kernel. Easiest way — start the container once
+> and check the passkey log; `start_passkey.sh` prints the exact rule to add,
+> e.g. `device_cgroup_rules: [ 'c 239:* rwm' ]`. Alternatively, on the host run:
+>
+>     grep hidraw /proc/devices
+>
+> and use the number shown. On AWS `6.8.0-1063-aws` it is `239`; on many
+> desktop kernels it is `234`.
 
 ### 3. Verify
 
@@ -253,6 +263,7 @@ The container log shows `[start-passkey] ...` and
 `[virtual-authenticator] Loaded passkey for ...` lines when everything works.
 After startup you can confirm the virtual key is visible to the container with
 `docker exec <container> ls -l /dev/hidraw*` — you should see a node such as
-`/dev/hidrawN` (created by the authenticator).
+`/dev/hidrawN` (created by the authenticator), and the passkey log should say
+`/dev/hidrawN is openable; IB Gateway should be able to reach the key.`
 
 

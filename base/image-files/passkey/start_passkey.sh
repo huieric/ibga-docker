@@ -82,8 +82,22 @@ log "Virtual authenticator PID=$AUTH_PID"
             if [ -n "$FOUND" ]; then
                 MAJMIN="$(cat "$d/dev" 2>/dev/null)"
                 if [ -n "$MAJMIN" ] && [ ! -e "/dev/$HRN" ]; then
-                    sudo mknod -m 666 "/dev/$HRN" c "${MAJMIN%%:*}" "${MAJMIN##*:}" \
+                    MAJ="${MAJMIN%%:*}"
+                    MIN="${MAJMIN##*:}"
+                    sudo mknod -m 666 "/dev/$HRN" c "$MAJ" "$MIN" \
                         && log "Created /dev/$HRN (${MAJMIN}) so IB Gateway can see the virtual security key."
+                    # Self-test: the node may exist but Docker's device cgroup
+                    # can still block I/O on it (only /dev/uhid is whitelisted
+                    # by `devices:`). Opening it RDWR mimics what IB Gateway
+                    # does; if it fails, print the exact rule the user needs.
+                    if bash -c "exec 3<>'/dev/$HRN'" 2>/dev/null; then
+                        log "/dev/$HRN is openable; IB Gateway should be able to reach the key."
+                    else
+                        log "WARNING: cannot open /dev/$HRN — Docker device cgroup is blocking hidraw I/O."
+                        log "Add to your compose service:"
+                        log "    device_cgroup_rules: [ 'c ${MAJ}:* rwm' ]"
+                        log "or for docker run: --device-cgroup-rule 'c ${MAJ}:* rwm'"
+                    fi
                 fi
                 break 2
             fi
