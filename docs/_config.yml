@@ -20,7 +20,7 @@ description: >- # this means to ignore newlines until "baseurl:"
   IB Gateway Automation (IBGA)
 baseurl: "/ibga" # the subpath of your site, e.g. /blog
 url: "https://heshiming.github.io" # the base hostname & protocol for your site, e.g. http://example.com
-github_username:  heshiming
+github_username:  huieric
 
 # Build settings
 markdown: kramdown
@@ -29,11 +29,11 @@ plugins:
   - jekyll-remote-theme
   - jekyll-feed
   - jekyll-sitemap
-repository: heshiming/ibga
+repository: huieric/ibga-docker
 
 color_scheme: ibga
 aux_links:
-  "IBGA on GitHub": "//github.com/heshiming/ibga"
+  "IBGA on GitHub": "//github.com/huieric/ibga-docker"
 aux_links_new_tab: true
 
 #ga_tracking: UA-5688423-5

@@ -16,11 +16,11 @@ If you are new to docker, images and containers, here is a primer on each concep
 
 <a href="https://www.docker.com/" target="_blank">Docker</a> is a set of software that implements OS-level virtualization technology to support running of containers based on images.
 
-## Obtaining the IBGA Image From Docker Hub
+## Obtaining the IBGA Image From GitHub Container Registry
 
-The IBGA docker image is located at <a href="https://hub.docker.com/r/heshiming/ibga" target="_blank">https://hub.docker.com/r/heshiming/ibga</a>. To obtain the image, use the following command:
+The IBGA docker image is located at <a href="https://github.com/huieric/ibga-docker/pkgs/container/ibga-docker" target="_blank">ghcr.io/huieric/ibga-docker</a>. To obtain the image, use the following command:
 
-    $ sudo docker pull heshiming/ibga
+    $ sudo docker pull ghcr.io/huieric/ibga-docker
 
 However, if you plan to follow our [Docker Compose flavored configuration](configuring.md), you don't need this command to pull it. Docker Compose will pull it automatically when you [launch the container](running.md).
 

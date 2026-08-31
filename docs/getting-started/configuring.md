@@ -21,7 +21,7 @@ The Docker Compose configuration file is in <a href="https://yaml.org/" target="
     version: '2'
     services:
       my-ibga:
-        image: heshiming/ibga
+        image: ghcr.io/huieric/ibga-docker
         restart: unless-stopped
         environment:
           - TERM=xterm

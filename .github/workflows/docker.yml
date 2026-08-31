@@ -35,7 +35,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/huieric/ibkr
+          images: ghcr.io/huieric/ibga-docker
           flavor: |
             latest=false
 

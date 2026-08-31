@@ -38,7 +38,7 @@ With TOTP (Time-based one-time password/IBKR Mobile Authenticator App) automatio
     version: '2'
     services:
       my-ibga:
-        image: heshiming/ibga
+        image: ghcr.io/huieric/ibga-docker
         restart: unless-stopped
         environment:
           - TERM=xterm
