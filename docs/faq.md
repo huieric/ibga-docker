@@ -261,14 +261,18 @@ services:
       # ... other IB_* variables ...
 ```
 
-> **Startup order** (across two compose files): `depends_on` only works within a
-> single Compose project, but you can merge the two projects with Compose's
-> top-level [`include:`](https://docs.docker.com/compose/compose-file/14-include/)
-> and then `depends_on: {condition: service_healthy}` works. The one step Compose
-> cannot run is the host-side `usbip attach` — cover it with the systemd unit
-> shipped in [soft-fido2](https://github.com/huieric/soft-fido2) (`systemd/usbip-attach.service`), which loads
-> `vhci-hcd`, waits for `127.0.0.1:3240`, and attaches persistently across
-> reboots.
+> **Startup order** (across two compose files): keep the two projects
+> **independent** — do not merge them with `include:` and do not add
+> `depends_on`. `include:` would pull soft-fido2 into this project and start it
+> a second time; `depends_on` can only reference services within one project.
+> No Compose ordering is needed: soft-fido2 is self-sufficient (a host-side
+> systemd/watchdog runs `usbip attach`), and IB Gateway retries its login until
+> the key is available. Start them independently:
+>
+> ```bash
+> docker compose -f <soft-fido2>/compose.yml up -d   # watchdog attaches the key
+> docker compose -f <ibga>/compose.yml up -d
+> ```
 
 ### 5. Verify
 
