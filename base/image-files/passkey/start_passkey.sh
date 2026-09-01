@@ -25,36 +25,49 @@ fi
 
 log() { echo "[start-passkey] $*" >&2; }
 
-# 把 soft-fido2 的 hidraw 节点补到容器内。
+# 把 soft-fido2 的 hidraw 节点补到容器内，并持续纠偏。
 #
 # IB Gateway 的内嵌 Chromium 在 Linux 上通过 /dev/hidraw*（usbhid 子系统）
 # 发现 FIDO 密钥，而不是 /dev/bus/usb。宿主机 usbhid 会为 USB/IP 设备创建
-# hidraw 节点，但容器的 /dev 是独立 tmpfs，看不到它；而 devices: 只快照
-# USB 节点。这里从 /sys/class/hidraw 找到 VID/PID=3713 的设备并 mknod。
+# hidraw 节点，但容器的 /dev 是独立 tmpfs，看不到它。
 #
-# 前提：compose 中需放行 hidraw 主设备号，即 device_cgroup_rules 同时含
+# 注意：watchdog 每次 detach/attach 后，内核会重新分配 hidraw 的 minor 号，
+# 所以这里必须常驻循环，随时按 /sys/class/hidraw 的最新 (major:minor) 修正
+# 容器内的节点（旧节点会指向已失效的 minor，打开报 No such device）。
+#
+# 前提：compose 的 device_cgroup_rules 需同时放行 USB 与 hidraw 主设备号，
 #   'c 189:* rwm'（USB）和 'c <hidraw-major>:* rwm'（hidraw，通常是 239）。
 (
-    for _ in $(seq 1 60); do
+    while :; do
+        FOUND_NODE=""
         for d in /sys/class/hidraw/hidraw*; do
             [ -e "$d" ] || continue
-            HRN="$(basename "$d")"
-            FOUND=""
-            if [ -r "$d/device/name" ] && [ "$(cat "$d/device/name" 2>/dev/null)" = "soft-fido2 FIDO2 Passkey" ]; then
-                FOUND=1
-            elif [ -r "$d/device/uevent" ] && grep -qi 'HID_ID=0003:00003713:00003713' "$d/device/uevent" 2>/dev/null; then
-                FOUND=1
-            fi
-            if [ -n "$FOUND" ]; then
-                MAJMIN="$(cat "$d/dev" 2>/dev/null)"
-                if [ -n "$MAJMIN" ] && [ ! -e "/dev/$HRN" ]; then
-                    sudo mknod -m 666 "/dev/$HRN" c "${MAJMIN%%:*}" "${MAJMIN##*:}" \
-                        && log "Created /dev/$HRN (${MAJMIN}) so Chromium can reach the passkey."
-                fi
-                break 2
+            if [ -r "$d/device/uevent" ] && grep -qi 'HID_NAME=soft-fido2' "$d/device/uevent" 2>/dev/null; then
+                FOUND_NODE="$d"
+                break
             fi
         done
-        sleep 1
+
+        if [ -n "$FOUND_NODE" ]; then
+            HRN="$(basename "$FOUND_NODE")"
+            MAJMIN="$(cat "$FOUND_NODE/dev" 2>/dev/null)"
+            MAJ="${MAJMIN%%:*}"
+            MIN="${MAJMIN##*:}"
+            # 若节点不存在，或已存在但 minor 号不一致，就重建。
+            NEED_CREATE=0
+            if [ ! -e "/dev/$HRN" ]; then
+                NEED_CREATE=1
+            elif [ "$(stat -c '%t:%T' "/dev/$HRN" 2>/dev/null)" != "$(printf '%x:%x' "$MAJ" "$MIN")" ]; then
+                sudo rm -f "/dev/$HRN"
+                NEED_CREATE=1
+            fi
+            if [ "$NEED_CREATE" = "1" ]; then
+                if sudo mknod -m 666 "/dev/$HRN" c "$MAJ" "$MIN"; then
+                    log "Created/refreshed /dev/$HRN ($MAJ:$MIN) so Chromium can reach the passkey."
+                fi
+            fi
+        fi
+        sleep 2
     done
 ) &
 HIDNOD_PID=$!
