@@ -244,18 +244,35 @@ lsusb -v -d 3713:3713   # should show the virtual FIDO2 device
 ### 4. Give IB Gateway access to the virtual USB device
 
 After `usbip attach`, the virtual key appears on the host as a real USB device
-under `/dev/bus/usb/...`. Pass it into the ibga container and enable the clicker:
+under `/dev/bus/usb/...`. Expose that directory as a **live bind mount** (a
+`devices:` entry snapshots devices at container creation and will not see the
+dynamically-attached USB/IP device) and permit the USB device major number:
 
 ```yaml
 services:
   my-ibga:
     image: ghcr.io/huieric/ibkr
-    devices:
-      - /dev/bus/usb
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb   # live view of host USB devices
+    device_cgroup_rules:
+      - 'c 189:* rwm'               # USB device nodes use major 189
     environment:
       - PASSKEY_ENABLED=1
       # ... other IB_* variables ...
 ```
+
+> **Startup order** (across two compose files): start soft-fido2 first and wait
+> until healthy, run `usbip attach` on the host, then start ibga:
+>
+> ```bash
+> docker compose -f <soft-fido2>/compose.yml up -d --wait
+> sudo modprobe vhci-hcd && sudo usbip attach -r 127.0.0.1 -b 1-1.1
+> docker compose -f <ibga>/compose.yml up -d
+> ```
+>
+> `depends_on` only works within a single Compose project, and it cannot run the
+> host-side `usbip attach` step. See
+> [soft-fido2](https://github.com/huieric/soft-fido2) for the full flow.
 
 ### 5. Verify
 

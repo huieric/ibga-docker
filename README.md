@@ -385,12 +385,12 @@ soft-fido2 容器 (network_mode: host, :3240)
      │  USB/IP 协议
      ▼
 宿主机: usbip attach (vhci-hcd)  → 生成真实 USB 设备 /dev/bus/usb/xxx/yyy
-     │  devices: [/dev/bus/usb] 透传
+     │  bind mount /dev/bus/usb + cgroup rule 'c 189:* rwm'
      ▼
 IBGA 容器 → IB Gateway（内嵌 Chromium 枚举到密钥）→ 完成签名登录
 ```
 
-完整步骤（导出密钥、启动 soft-fido2、`usbip attach`、`devices: [/dev/bus/usb]`）见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)。
+完整步骤（导出密钥、启动 soft-fido2、`usbip attach`、bind mount `/dev/bus/usb`）见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)。
 
 ---
 
