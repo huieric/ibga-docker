@@ -165,18 +165,18 @@ Note that if your account is already using IB Key or Printed/Digital Keycode Car
 
 Interactive Brokers now mandates **passkey** authentication for many accounts; the
 TOTP / IB Key flows that IBGA could automate no longer apply. IBGA supports a
-**software passkey** solution that keeps login fully headless: a virtual
-FIDO2/CTAP2 authenticator runs inside the container, emulates a USB security key
-through the Linux `/dev/uhid` interface, and automatically answers IB Gateway's
-"Use your Passkey device" prompt. No physical USB key, no browser, no manual
-interaction is required.
+**software passkey** solution that keeps login fully headless. It is split across
+two cooperating components:
 
-How it works inside the container:
+1. **The authenticator** — a separate container,
+   [`huieric/soft-fido2`](https://github.com/huieric/soft-fido2), imports the
+   passkey private key and serves it as a **real USB device over USB/IP**.
+2. **The clicker** — IBGA's `click_authenticate.sh` clicks the passkey
+   "Authenticate" button via `xdotool`/JAuto once IB Gateway shows the prompt.
 
-1. `start_passkey.sh` copies the mounted private-key JSON into place.
-2. `virtual_authenticator.py` presents a virtual security key to IB Gateway and
-   signs the WebAuthn challenge with the imported P-256 key.
-3. `click_authenticate.sh` clicks the "Authenticate" button via `xdotool`.
+Why USB/IP: IB Gateway's passkey UI runs in an embedded Chromium that enumerates
+FIDO keys on the **USB bus**; a UHID device (`/dev/uhid`) is invisible to it.
+USB/IP presents the software key as a real USB device, which Chromium can find.
 
 ### 1. Export the passkey private key (once, out-of-band)
 
@@ -205,65 +205,67 @@ Assemble the output into `ibkr_passkey.json`:
 
 The key material does not rotate, so you only need to do this once.
 
-### 2. Mount the credential and enable the feature
+### 2. Run the soft-fido2 authenticator container
 
-`docker-compose.yml`:
+The authenticator imports `ibkr_passkey.json` and serves it as a real USB device
+over USB/IP (port `3240`, host network). Create a `compose.yml` next to your
+ibga compose file:
 
 ```yaml
-version: '2'
+services:
+  soft-fido2:
+    image: ghcr.io/huieric/soft-fido2:latest
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./ibkr_passkey.json:/run/secrets/ibkr_passkey.json:ro
+```
+
+```bash
+docker compose up -d
+docker compose logs -f soft-fido2   # expect "USB/IP authenticator listening on 0.0.0.0:3240"
+```
+
+### 3. Attach it as a real USB device on the host
+
+```bash
+sudo modprobe vhci-hcd
+sudo usbip list -r 127.0.0.1
+sudo usbip attach -r 127.0.0.1 -b 1-1.1
+lsusb -v -d 3713:3713   # should show the virtual FIDO2 device
+```
+
+> Repeat after a reboot or container restart (the `vhci-hcd` module and the
+> `usbip attach` binding do not persist). To load the module at boot, run once:
+> `echo vhci-hcd | sudo tee /etc/modules-load.d/vhci-hcd.conf`.
+> `usbip` ships in `linux-tools-generic` (Debian/Ubuntu); `vhci-hcd` is in
+> `linux-modules-extra` on Ubuntu/AWS.
+
+### 4. Give IB Gateway access to the virtual USB device
+
+After `usbip attach`, the virtual key appears on the host as a real USB device
+under `/dev/bus/usb/...`. Pass it into the ibga container and enable the clicker:
+
+```yaml
 services:
   my-ibga:
     image: ghcr.io/huieric/ibkr
     devices:
-      - /dev/uhid:/dev/uhid
-    # Allow the container to access the /dev/hidrawN node that the virtual
-    # security key appears as. The hidraw MAJOR is assigned dynamically by
-    # the kernel (e.g. 234 on some kernels, 239 on AWS 6.8 kernels) — see the
-    # note below on how to find the correct value.
-    device_cgroup_rules:
-      - 'c 239:* rwm'
+      - /dev/bus/usb
     environment:
       - PASSKEY_ENABLED=1
-      - IMPORT_PASSKEY_FILE=/secrets/ibkr_passkey.json
       # ... other IB_* variables ...
-    volumes:
-      - ./ibkr_passkey.json:/secrets/ibkr_passkey.json:ro
-      - ./run/program:/home/ibg
-      - ./run/settings:/home/ibg_settings
 ```
 
-> **`/dev/uhid` requirement**: the virtual security key is registered through
-> the Linux UHID kernel interface. The host kernel must have UHID support
-> (`CONFIG_UHID`); on some distributions (e.g. Ubuntu on AWS) this is provided
-> by the `linux-modules-extra` package. The container must be granted access via
-> the `devices` entry above.
->
-> **`/dev/hidrawN` requirement**: when the authenticator registers the key, the
-> kernel exposes it as a HID device (`/dev/hidrawN`). Because the container's
-> `/dev` is a private tmpfs, `start_passkey.sh` automatically creates the
-> matching node inside the container via `mknod`. Docker's device cgroup blocks
-> I/O on that node unless a `device_cgroup_rules` entry permits its major
-> number. For `docker run`, use `--device-cgroup-rule 'c <major>:* rwm'`.
->
-> **How to find the correct major**: hidraw's major number is allocated
-> dynamically and differs per kernel. Easiest way — start the container once
-> and check the passkey log; `start_passkey.sh` prints the exact rule to add,
-> e.g. `device_cgroup_rules: [ 'c 239:* rwm' ]`. Alternatively, on the host run:
->
->     grep hidraw /proc/devices
->
-> and use the number shown. On AWS `6.8.0-1063-aws` it is `239`; on many
-> desktop kernels it is `234`.
+### 5. Verify
 
-### 3. Verify
+Start both containers. IB Gateway should log in automatically: IBGA enters the
+credentials, the clicker presses "Authenticate", and the soft-fido2 container
+signs the WebAuthn challenge. Check the logs:
 
-Start the container and open the noVNC view. IB Gateway should log in
-automatically, with the passkey prompt answered by the virtual authenticator.
-The container log shows `[start-passkey] ...` and
-`[virtual-authenticator] Loaded passkey for ...` lines when everything works.
-After startup you can confirm the virtual key is visible to the container with
-`docker exec <container> ls -l /dev/hidraw*` — you should see a node such as
-`/dev/hidrawN` (created by the authenticator), and the passkey log should say
-`/dev/hidrawN is openable; IB Gateway should be able to reach the key.`
+```bash
+docker compose logs soft-fido2       # "loaded passkey rpId=..." + "listening on 0.0.0.0:3240"
+docker exec <ibga> sh -c 'ls /dev/bus/usb/*/* 2>/dev/null'   # the virtual device node
+```
 
 

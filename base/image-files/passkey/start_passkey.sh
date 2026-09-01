@@ -1,128 +1,35 @@
 #!/usr/bin/env bash
-# start_passkey.sh — 在容器内启动整套软件 passkey 登录链路
+# start_passkey.sh — 在 IB Gateway 容器内启动 passkey "Authenticate" 点击器
 #
-# 这个脚本负责：
-#   1. 从挂载的私钥 JSON（IMPORT_PASSKEY_FILE）复制出凭据文件
-#   2. 启动虚拟 CTAP2 认证器（passkey/virtual_authenticator.py）
-#   3. 启动 Authenticate 按钮自动点击脚本（passkey/click_authenticate.sh）
+# 注意：软件 passkey 认证器本身已迁移到独立的 soft-fido2 仓库
+# （github.com/huieric/soft-fido2），以 USB/IP 的方式在宿主机上呈现为一个
+# 真实 USB 设备。IB Gateway 通过 `devices: [/dev/bus/usb]` 访问它。
 #
-# 它被 base/image-files/scripts/manager.sh 调用（在启动 IB Gateway 之前），
-# 并在后台持续运行，直到容器停止。
+# 因此本脚本只负责登录流程里的最后一步：当 IB Gateway 弹出 passkey 验证
+# 对话框时，自动点击 "Authenticate" 按钮（点击后由 soft-fido2 完成 CTAP2
+# 签名应答）。
 #
-# 依赖：
-#   - /dev/uhid 已暴露给容器（compose.yml 中 `devices: [/dev/uhid]`）
-#   - xdotool 已安装（base 镜像已内置）
-#
-# 环境变量（可在 compose.yml 提供）：
-#   PASSKEY_ENABLED      设为 1 才启用（默认关闭，避免影响 TOTP/IB Key 用户）
-#   IMPORT_PASSKEY_FILE  宿主机挂载进来的私钥 JSON 路径（必需，见 export_credential.sh）
-#   PASSKEY_FILE         凭据文件路径（默认 /home/ibg_settings/ibkr_passkey.json）
+# 环境变量：
+#   PASSKEY_ENABLED   设为 1 才启用（默认关闭，避免影响 TOTP/IB Key 用户）
 #
 set -euo pipefail
 
 PASSKEY_ENABLED="${PASSKEY_ENABLED:-0}"
-PASSKEY_FILE="${PASSKEY_FILE:-/home/ibg_settings/ibkr_passkey.json}"
 PASSKEY_DIR="${PASSKEY_DIR:-/opt/ibga/passkey}"
-# ibga base 镜像已预建 /opt/venv（含 ib-insync/pandas），passkey 依赖也装在这里
-VENV_PYTHON="/opt/venv/bin/python3"
-CRED_EXPORT_SCRIPT="$PASSKEY_DIR/export_credential.sh"
-AUTH_SCRIPT="$PASSKEY_DIR/virtual_authenticator.py"
 CLICK_SCRIPT="$PASSKEY_DIR/click_authenticate.sh"
 
 if [ "$PASSKEY_ENABLED" != "1" ]; then
-    echo "[start-passkey] PASSKEY_ENABLED!=1; skipping software passkey login." >&2
+    echo "[start-passkey] PASSKEY_ENABLED!=1; skipping passkey clicker." >&2
     exit 0
 fi
 
 log() { echo "[start-passkey] $*" >&2; }
 
-# 1. 从挂载的 JSON 复制凭据（若目标文件尚不存在）
-if [ ! -s "$PASSKEY_FILE" ]; then
-    log "Copying passkey credential from IMPORT_PASSKEY_FILE..."
-    if ! bash "$CRED_EXPORT_SCRIPT"; then
-        log "WARNING: credential copy failed; virtual authenticator will wait for it."
-    fi
-else
-    log "Credential already present: $PASSKEY_FILE"
-fi
+log "Starting Authenticate clicker (the passkey itself is served by the soft-fido2 container)..."
 
-# 2. 校验 /dev/uhid 并放宽权限（容器以 ibg 用户运行，需读写该设备节点）
-if [ ! -e /dev/uhid ]; then
-    log "ERROR: /dev/uhid not present. Ensure the container runs with --device /dev/uhid." >&2
-    exit 1
-fi
-sudo chmod 666 /dev/uhid 2>/dev/null || log "WARNING: cannot chmod /dev/uhid; authenticator may fail to open it."
-
-# 3. 启动虚拟认证器（后台）—— 使用 venv 里的 Python（已装 fido2/cbor2/cryptography）
-log "Starting virtual CTAP2 authenticator..."
-"$VENV_PYTHON" "$AUTH_SCRIPT" --credential-file "$PASSKEY_FILE" --device /dev/uhid &
-AUTH_PID=$!
-log "Virtual authenticator PID=$AUTH_PID"
-
-# 3b. 把虚拟密钥的 hidraw 节点补到容器内
-#
-#     认证器向 /dev/uhid 写入 CREATE2 后，内核会分配一个 hidraw 设备并在
-#     *宿主机* 上生成 /dev/hidrawN 节点；但容器的 /dev 是独立 tmpfs，看不到
-#     这个新节点，导致 IB Gateway（扫描 /dev/hidraw*）找不到安全密钥。
-#
-#     这里从 /sys/class/hidraw（容器与宿主机共享的内核视图）找到名为
-#     "softpasskey" 的 hidraw 设备，用 mknod 在容器内补出 /dev/hidrawN。
-(
-    for _ in $(seq 1 30); do
-        for d in /sys/class/hidraw/hidraw*; do
-            [ -e "$d" ] || continue
-            HRN="$(basename "$d")"
-            FOUND=""
-            # 优先匹配 device/name，其次匹配 device/uevent 里的 HID_NAME
-            if [ -r "$d/device/name" ] && [ "$(cat "$d/device/name" 2>/dev/null)" = "softpasskey" ]; then
-                FOUND=1
-            elif [ -r "$d/device/uevent" ] && grep -qi 'HID_NAME=softpasskey' "$d/device/uevent" 2>/dev/null; then
-                FOUND=1
-            fi
-            if [ -n "$FOUND" ]; then
-                MAJMIN="$(cat "$d/dev" 2>/dev/null)"
-                if [ -n "$MAJMIN" ] && [ ! -e "/dev/$HRN" ]; then
-                    MAJ="${MAJMIN%%:*}"
-                    MIN="${MAJMIN##*:}"
-                    sudo mknod -m 666 "/dev/$HRN" c "$MAJ" "$MIN" \
-                        && log "Created /dev/$HRN (${MAJMIN}) so IB Gateway can see the virtual security key."
-                    # Self-test: the node may exist but Docker's device cgroup
-                    # can still block I/O on it (only /dev/uhid is whitelisted
-                    # by `devices:`). Opening it RDWR mimics what IB Gateway
-                    # does; if it fails, print the exact rule the user needs.
-                    if bash -c "exec 3<>'/dev/$HRN'" 2>/dev/null; then
-                        log "/dev/$HRN is openable; IB Gateway should be able to reach the key."
-                    else
-                        log "WARNING: cannot open /dev/$HRN — Docker device cgroup is blocking hidraw I/O."
-                        log "Add to your compose service:"
-                        log "    device_cgroup_rules: [ 'c ${MAJ}:* rwm' ]"
-                        log "or for docker run: --device-cgroup-rule 'c ${MAJ}:* rwm'"
-                    fi
-                fi
-                break 2
-            fi
-        done
-        sleep 1
-    done
-) &
-HIDNOD_PID=$!
-
-# 4. 启动 Authenticate 点击脚本（后台）
-log "Starting Authenticate clicker..."
 bash "$CLICK_SCRIPT" &
 CLICK_PID=$!
 log "Clicker PID=$CLICK_PID"
 
-# 5. 若启动期间挂载文件还没就位，后台重试复制
-( while :; do
-    if [ -s "$PASSKEY_FILE" ]; then
-        break
-    fi
-    sleep 5
-    bash "$CRED_EXPORT_SCRIPT" 2>/dev/null || true
- done ) &
-RETRY_PID=$!
-
-# 6. 保持前台，转发信号（Ctrl+C / SIGTERM 时优雅关闭子进程）
-trap 'kill $AUTH_PID $CLICK_PID $RETRY_PID $HIDNOD_PID 2>/dev/null || true' INT TERM
-wait "$AUTH_PID"
+trap 'kill $CLICK_PID 2>/dev/null || true' INT TERM
+wait "$CLICK_PID"

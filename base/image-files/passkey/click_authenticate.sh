@@ -13,8 +13,8 @@
 #   组件，找到文本含 "Authenticate" 的 JButton，再用 xdotool 点击其坐标
 #   （与 _run_ibg.sh 中点击 "Log In" / "OK" 按钮是同一套成熟做法）。
 #
-#   点击之后虚拟认证器（passkey/virtual_authenticator.py）会立即完成 CTAP2
-#   签名应答，本脚本只需保证 "Authenticate" 被点到即可。
+#   点击之后由独立的 soft-fido2 容器（USB/IP）完成 CTAP2 签名应答，
+#   本脚本只需保证 "Authenticate" 被点到即可。
 #
 # 依赖：
 #   - JAuto 已随 IB Gateway 启动（由 _run_ibg.sh 注入 -agentpath）

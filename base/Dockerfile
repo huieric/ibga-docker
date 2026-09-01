@@ -19,7 +19,7 @@ RUN apt-get update && \
     libgbm1 \
     libnspr4 && \
     python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir ib-insync pandas fido2 cbor2 cryptography && \
+    /opt/venv/bin/pip install --no-cache-dir ib-insync pandas && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 RUN useradd -ms /bin/bash -u 2000 ibg && \
@@ -40,8 +40,9 @@ WORKDIR /home/ibg
 COPY --from=util_build /tmp/show_text /bin
 ADD image-files/scripts /opt/ibga/
 # --- software passkey login (see passkey/) ---
-# The virtual CTAP2 authenticator and clicker live in /opt/ibga/passkey and
-# are driven by start_passkey.sh (launched from manager.sh when PASSKEY_ENABLED=1).
+# Only the "Authenticate" clicker lives here. The passkey authenticator itself
+# is a separate container (github.com/huieric/soft-fido2) served over USB/IP;
+# the IB Gateway container just needs `devices: [/dev/bus/usb]` to see it.
 ADD image-files/passkey /opt/ibga/passkey/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \

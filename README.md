@@ -161,7 +161,7 @@ docker compose up
 - **自动安装 & 升级 IB Gateway**：首次运行自动下载，无需手动安装
 - **全自动登录**：用户名、密码、地区全部通过环境变量注入
 - **TOTP 自动化**（最新特性）：提供密钥后，6 位动态验证码由 `oathtool` 自动生成并填入，无需摸手机
-- **Passkey 无人值守登录**：通过软件虚拟安全密钥（`/dev/uhid`）自动应答 IBKR 的 Passkey 认证，无需实体 USB Key、无需人工操作（见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)）
+- **Passkey 无人值守登录**：配合独立的 [soft-fido2](https://github.com/huieric/soft-fido2) 容器（软件安全密钥，经 USB/IP 呈现为真实 USB 设备），IBGA 自动点击 Authenticate 按钮完成登录，无需实体 USB Key、无需人工操作（见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)）
 - **自动处理弹窗**：模拟交易确认框、选项对话框全部自动点击确认
 
 **当没有配置 TOTP 密钥时，登录后 noVNC 界面会显示如下 2FA 等待画面**，此时只需在手机上点一下"允许"即可：
@@ -364,6 +364,33 @@ bwu fido2 --help
 ```
 
 > 构建需要能访问 GitHub 与 crates.io 才能拉取源码和依赖；若服务器有 HTTPS 限制，请先为 `git`（`http.proxy`）和 `cargo`（`CARGO_HTTP_PROXY`）配置代理。
+
+---
+
+## Passkey 无人值守登录（与 soft-fido2 协作）
+
+IBKR 现已强制 Passkey 认证，旧的 TOTP / IB Key 自动化不再适用。本仓库提供**两段式**无人值守方案：
+
+| 组件 | 仓库 | 职责 |
+|---|---|---|
+| **soft-fido2 容器** | [huieric/soft-fido2](https://github.com/huieric/soft-fido2) | 导入 passkey 私钥，经 **USB/IP** 把它呈现为宿主机上的真实 USB 设备 |
+| **IBGA 容器** | 本仓库 | 自动登录 + 点击 passkey「Authenticate」按钮（`PASSKEY_ENABLED=1`） |
+
+**为什么用 USB/IP 而非 UHID**：IB Gateway 的 passkey 界面跑在内嵌 Chromium 里，它用 libusb 枚举 **USB 总线** 上的 FIDO 密钥；`/dev/uhid` 造出的虚拟 HID 设备不在 USB 总线上，Chromium 看不到。USB/IP 则把软件密钥变成一个真实 USB 设备（`vendor/product 0x3713`），可被正常枚举。
+
+**数据流**：
+
+```
+soft-fido2 容器 (network_mode: host, :3240)
+     │  USB/IP 协议
+     ▼
+宿主机: usbip attach (vhci-hcd)  → 生成真实 USB 设备 /dev/bus/usb/xxx/yyy
+     │  devices: [/dev/bus/usb] 透传
+     ▼
+IBGA 容器 → IB Gateway（内嵌 Chromium 枚举到密钥）→ 完成签名登录
+```
+
+完整步骤（导出密钥、启动 soft-fido2、`usbip attach`、`devices: [/dev/bus/usb]`）见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)。
 
 ---
 

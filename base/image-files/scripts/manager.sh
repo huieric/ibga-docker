@@ -36,11 +36,11 @@ MSG="------------------------------------------------
 _info "$MSG"
 
 # --- software passkey login (see passkey/) ---
-# When PASSKEY_ENABLED=1, start the virtual CTAP2 authenticator and the
-# "Authenticate" clicker BEFORE IB Gateway launches so the UHID device is
-# registered before IBG enumerates HID devices.
+# When PASSKEY_ENABLED=1, start the "Authenticate" clicker BEFORE IB Gateway
+# launches. The passkey authenticator itself is the soft-fido2 container
+# (USB/IP); this script only clicks the passkey dialog button.
 if [ "${PASSKEY_ENABLED:-0}" = "1" ]; then
-    _info "• starting software passkey login chain ...\n"
+    _info "• starting passkey Authenticate clicker ...\n"
     setsid /opt/ibga/passkey/start_passkey.sh > >(tee -a "$IBGA_LOG_EXPORT_DIR/passkey_$(date +%Y%m%d).log") 2>&1 &
 fi
 
