@@ -335,38 +335,6 @@ ib.connect('127.0.0.1', 4000, clientId=1)
 
 ---
 
-## 构建 bitwarden-use（Passkey 私钥导出工具）
-
-启用 [Passkey 无人值守登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login) 前，需要先用 `bitwarden-use`（`bwu`）把 IBKR passkey 私钥从 Bitwarden 导出一次。
-
-上游预编译的 `bitwarden-use` 需要 GLIBC 2.39，在 Ubuntu 22.04（GLIBC 2.35）等较旧系统上会报错：
-
-    /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.39' not found
-
-解决办法是在目标机器上从源码编译（产物自动链接本机 glibc）。仓库提供了 `build-bwu.sh` 一键完成：
-
-```bash
-./build-bwu.sh                                # 安装到 ~/.local/bin
-BWU_INSTALL_DIR=/usr/local/bin ./build-bwu.sh # 或指定安装目录
-```
-
-脚本会自动安装 Rust（如缺失）、克隆源码、归一化 `Cargo.toml`（edition 2026 → 2024）、**打上「新设备验证」补丁**、编译 `bitwarden-use` + `bitwarden-use-agent`，并输出二进制的最高 GLIBC 依赖版本供核对。
-
-> **关于「新设备验证」**：Bitwarden 对来自新 IP / 新设备的登录会要求邮箱验证（返回 `New device verification required`），而上游 `bitwarden-use` 未实现该流程，直接报 `api request returned error: 400`。本脚本内置的补丁已修复此问题——首次在新机器上 `bwu unlock` 时，输入主密码后会再提示「Enter the verification code sent to your email.」，填入邮件里的验证码即可完成登录，之后会记住设备不再重复要求。
-
-可选环境变量：`BWU_REPO`（上游仓库地址）、`BWU_REF`（分支/标签）、`BWU_INSTALL_DIR`（安装目录）、`BWU_KEEP_SRC=1`（保留源码目录）。
-
-构建完成后验证：
-
-```bash
-bwu --version
-bwu fido2 --help
-```
-
-> 构建需要能访问 GitHub 与 crates.io 才能拉取源码和依赖；若服务器有 HTTPS 限制，请先为 `git`（`http.proxy`）和 `cargo`（`CARGO_HTTP_PROXY`）配置代理。
-
----
-
 ## Passkey 无人值守登录（与 soft-fido2 协作）
 
 IBKR 现已强制 Passkey 认证，旧的 TOTP / IB Key 自动化不再适用。本仓库提供**两段式**无人值守方案：
