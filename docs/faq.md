@@ -261,18 +261,14 @@ services:
       # ... other IB_* variables ...
 ```
 
-> **Startup order** (across two compose files): start soft-fido2 first and wait
-> until healthy, run `usbip attach` on the host, then start ibga:
->
-> ```bash
-> docker compose -f <soft-fido2>/compose.yml up -d --wait
-> sudo modprobe vhci-hcd && sudo usbip attach -r 127.0.0.1 -b 1-1.1
-> docker compose -f <ibga>/compose.yml up -d
-> ```
->
-> `depends_on` only works within a single Compose project, and it cannot run the
-> host-side `usbip attach` step. See
-> [soft-fido2](https://github.com/huieric/soft-fido2) for the full flow.
+> **Startup order** (across two compose files): `depends_on` only works within a
+> single Compose project, but you can merge the two projects with Compose's
+> top-level [`include:`](https://docs.docker.com/compose/compose-file/14-include/)
+> and then `depends_on: {condition: service_healthy}` works. The one step Compose
+> cannot run is the host-side `usbip attach` — cover it with the systemd unit
+> shipped in [soft-fido2](https://github.com/huieric/soft-fido2) (`systemd/usbip-attach.service`), which loads
+> `vhci-hcd`, waits for `127.0.0.1:3240`, and attaches persistently across
+> reboots.
 
 ### 5. Verify
 
