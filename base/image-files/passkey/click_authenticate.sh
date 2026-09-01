@@ -90,8 +90,11 @@ click_via_xdotool() {
 while :; do
     now="$(date +%s)"
     if [ "$(( now - start_epoch ))" -ge "$TIMEOUT" ]; then
-        log "Timed out after ${TIMEOUT}s without detecting the passkey prompt."
-        exit 1
+        # IB Gateway runs 24/7 and re-prompts daily; never give up. Just log
+        # and reset the timer so we keep monitoring instead of exiting (an
+        # exited clicker is what caused the occasional "no auto-click" bug).
+        log "No passkey prompt detected in the last ${TIMEOUT}s; still monitoring."
+        start_epoch="$now"
     fi
 
     CLICKED=0

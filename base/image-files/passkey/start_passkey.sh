@@ -25,11 +25,16 @@ fi
 
 log() { echo "[start-passkey] $*" >&2; }
 
-log "Starting Authenticate clicker (the passkey itself is served by the soft-fido2 container)..."
+# 监督循环：点击器常驻。万一它异常退出，立即重启，保证后续任何一次
+# 重新登录（每日 IB_LOGOFF 重启等）都有点击器在场。
+while :; do
+    log "Starting Authenticate clicker (the passkey itself is served by the soft-fido2 container)..."
 
-bash "$CLICK_SCRIPT" &
-CLICK_PID=$!
-log "Clicker PID=$CLICK_PID"
+    bash "$CLICK_SCRIPT" &
+    CLICK_PID=$!
+    log "Clicker PID=$CLICK_PID"
 
-trap 'kill $CLICK_PID 2>/dev/null || true' INT TERM
-wait "$CLICK_PID"
+    wait "$CLICK_PID" || true
+    log "Clicker exited (code=$?); restarting in 2s ..."
+    sleep 2
+done
