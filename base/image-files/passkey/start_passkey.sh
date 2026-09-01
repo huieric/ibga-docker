@@ -25,6 +25,40 @@ fi
 
 log() { echo "[start-passkey] $*" >&2; }
 
+# 把 soft-fido2 的 hidraw 节点补到容器内。
+#
+# IB Gateway 的内嵌 Chromium 在 Linux 上通过 /dev/hidraw*（usbhid 子系统）
+# 发现 FIDO 密钥，而不是 /dev/bus/usb。宿主机 usbhid 会为 USB/IP 设备创建
+# hidraw 节点，但容器的 /dev 是独立 tmpfs，看不到它；而 devices: 只快照
+# USB 节点。这里从 /sys/class/hidraw 找到 VID/PID=3713 的设备并 mknod。
+#
+# 前提：compose 中需放行 hidraw 主设备号，即 device_cgroup_rules 同时含
+#   'c 189:* rwm'（USB）和 'c <hidraw-major>:* rwm'（hidraw，通常是 239）。
+(
+    for _ in $(seq 1 60); do
+        for d in /sys/class/hidraw/hidraw*; do
+            [ -e "$d" ] || continue
+            HRN="$(basename "$d")"
+            FOUND=""
+            if [ -r "$d/device/name" ] && [ "$(cat "$d/device/name" 2>/dev/null)" = "soft-fido2 FIDO2 Passkey" ]; then
+                FOUND=1
+            elif [ -r "$d/device/uevent" ] && grep -qi 'HID_ID=0003:00003713:00003713' "$d/device/uevent" 2>/dev/null; then
+                FOUND=1
+            fi
+            if [ -n "$FOUND" ]; then
+                MAJMIN="$(cat "$d/dev" 2>/dev/null)"
+                if [ -n "$MAJMIN" ] && [ ! -e "/dev/$HRN" ]; then
+                    sudo mknod -m 666 "/dev/$HRN" c "${MAJMIN%%:*}" "${MAJMIN##*:}" \
+                        && log "Created /dev/$HRN (${MAJMIN}) so Chromium can reach the passkey."
+                fi
+                break 2
+            fi
+        done
+        sleep 1
+    done
+) &
+HIDNOD_PID=$!
+
 # 监督循环：点击器常驻。万一它异常退出，立即重启，保证后续任何一次
 # 重新登录（每日 IB_LOGOFF 重启等）都有点击器在场。
 while :; do

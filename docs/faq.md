@@ -256,10 +256,20 @@ services:
       - /dev/bus/usb:/dev/bus/usb   # live view of host USB devices
     device_cgroup_rules:
       - 'c 189:* rwm'               # USB device nodes use major 189
+      - 'c 239:* rwm'               # hidraw (usbhid) nodes — IB Gateway's embedded
+                                    # Chromium discovers FIDO keys via /dev/hidraw*
     environment:
       - PASSKEY_ENABLED=1
       # ... other IB_* variables ...
 ```
+
+> **Why hidraw too**: IB Gateway's passkey UI runs in an embedded Chromium that
+> enumerates FIDO keys through `/dev/hidraw*` (the usbhid subsystem), not
+> `/dev/bus/usb`. The host's usbhid driver creates `/dev/hidrawN` for the
+> USB/IP device; `start_passkey.sh` automatically `mknod`s that node inside the
+> container, and the `c 239:*` cgroup rule above is what actually permits I/O on
+> it. The hidraw major number is dynamic (usually 239; check with
+> `grep hidraw /proc/devices` on the host if it differs).
 
 > **Startup order** (across two compose files): keep the two projects
 > **independent** — do not merge them with `include:` and do not add
