@@ -570,8 +570,11 @@ function __maintenance_handle_passkey {
     # not click the BrowserView or press Tab: either can move focus away from
     # Chromium's automatically focused PIN input and make the following text
     # go nowhere. The WebAuthn PIN page focuses its input when displayed.
-    xdotool type --window "$WIN" --delay 50 -- "$FIDO2_PIN"
-    xdotool key --window "$WIN" Return
+    # `--window` targets the top-level Swing window, but the actual HTML input
+    # lives in a JxBrowser child and can reject events addressed to its parent.
+    # After activation, send normal keyboard events to the active focus.
+    xdotool type --clearmodifiers --delay 50 -- "$FIDO2_PIN"
+    xdotool key --clearmodifiers Return
     G_PASSKEY_PIN_ENTERED=1
     unset FIDO2_PIN
 }
