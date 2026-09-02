@@ -518,13 +518,20 @@ function __maintenance_handle_passkey {
         while IFS= read -r COMPONENT; do
             [ -z "$COMPONENT" ] && continue
             local -A PROPS="$(_jauto_parse_props $COMPONENT)"
-            if [[ "${PROPS['text']:-}" == *"Authenticate"* ]]; then
+            if [[ "${PROPS['text']:-}" == *"Authenticate"* ]] && \
+               [ "${G_PASSKEY_AUTH_CLICKED:-0}" -eq 0 ]; then
                 _info "  - passkey Authenticate button found; clicking ...\n"
                 xdotool mousemove "${PROPS['mx']}" "${PROPS['my']}" click 1
+                G_PASSKEY_AUTH_CLICKED=1
                 sleep 0.25
                 break
             fi
         done <<< "$OUTPUT"
+    else
+        # The second-factor dialog disappeared; allow the next login ceremony
+        # to click Authenticate once again.
+        G_PASSKEY_AUTH_CLICKED=0
+        G_PASSKEY_PIN_ENTERED=0
     fi
 
     # Chromium's security-key PIN prompt is not exposed through JAuto. Enter
@@ -542,6 +549,7 @@ function __maintenance_handle_passkey {
     WIN_IDS="$(xdotool search --name -i 'PIN required' 2>/dev/null; \
               xdotool search --name -i 'security key' 2>/dev/null)"
     [ -n "$WIN_IDS" ] || return
+    [ "${G_PASSKEY_PIN_ENTERED:-0}" -eq 0 ] || return
     WIN="$(printf '%s\n' "$WIN_IDS" | head -1 | tr -d '[:space:]')"
     [ -n "$WIN" ] || return
 
@@ -550,6 +558,7 @@ function __maintenance_handle_passkey {
     xdotool windowfocus "$WIN" 2>/dev/null || true
     xdotool type --window "$WIN" --delay 50 -- "$FIDO2_PIN"
     xdotool key --window "$WIN" Return
+    G_PASSKEY_PIN_ENTERED=1
     unset FIDO2_PIN
 }
 
@@ -1010,6 +1019,8 @@ MSG="---------------------------------------------------
             G_LOG_EXPORT_DONE=0
             G_LOGIN_FAILED=0
             G_LOGIN_AGAIN=0
+            G_PASSKEY_AUTH_CLICKED=0
+            G_PASSKEY_PIN_ENTERED=0
             G_WELCOME_MESSAGE=""
             _info "• filling in login form ...\n"
             _login_toggle "$IB_LOGINTAB"
