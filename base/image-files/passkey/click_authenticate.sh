@@ -38,6 +38,33 @@ for f in _env.sh _utils.sh _jauto.sh; do
     fi
 done
 
+FIDO2_PIN_FILE="${FIDO2_PIN_FILE:-/run/secrets/fido2_pin}"
+
+read_fido2_pin() {
+    [ -r "$FIDO2_PIN_FILE" ] || return 1
+    IFS= read -r FIDO2_PIN < "$FIDO2_PIN_FILE" || true
+    [ -n "${FIDO2_PIN:-}" ]
+}
+
+# Chromium's security-key PIN dialog is not a Swing component. Enter the PIN
+# from the read-only Docker secret without ever writing it to the log.
+try_enter_security_key_pin() {
+    read_fido2_pin || return 1
+    local win_ids win
+    win_ids="$(xdotool search --name -i 'PIN required' 2>/dev/null; \
+               xdotool search --name -i 'security key' 2>/dev/null)"
+    [ -n "$win_ids" ] || return 1
+    win="$(printf '%s\n' "$win_ids" | head -1 | tr -d '[:space:]')"
+    [ -n "$win" ] || return 1
+    log "Found security-key PIN dialog; entering configured PIN."
+    xdotool windowactivate --sync "$win" 2>/dev/null || true
+    xdotool windowfocus "$win" 2>/dev/null || true
+    xdotool type --window "$win" --delay 50 -- "$FIDO2_PIN"
+    xdotool key --window "$win" Return
+    unset FIDO2_PIN
+    return 0
+}
+
 HAS_JAUTO=0
 if declare -F _call_jauto >/dev/null 2>&1 && \
    declare -F _jauto_parse_props >/dev/null 2>&1; then
@@ -57,12 +84,14 @@ try_click_from_components() {
         [ -z "$COMPONENT" ] && continue
         # 与 _login_click 相同的解析方式：不带引号传入，回填到关联数组
         local -A P="$(_jauto_parse_props $COMPONENT)"
-        if [ "${P[F1]:-}" = "javax.swing.JButton" ] && \
-           [[ "${P[text]:-}" == *uthenticate* ]]; then
+        # IB Gateway 的 Authenticate 按钮是自定义 Swing 按钮类
+        # twslaunch.jtscomponents.J（JButton 子类），不是标准
+        # javax.swing.JButton，所以这里不能按 F1 类名匹配，只按文本匹配。
+        if [[ "${P[text]:-}" == *uthenticate* ]]; then
             BX="${P[mx]:-0}"
             BY="${P[my]:-0}"
             if [ "$BX" != "0" ] || [ "$BY" != "0" ]; then
-                log "Found Authenticate button at ($BX,$BY); clicking."
+                log "Found Authenticate button ($(basename "${P[F1]:-?}")) at ($BX,$BY); clicking."
                 xdotool mousemove "$BX" "$BY" click 1
                 return 0
             fi
@@ -98,6 +127,10 @@ while :; do
     fi
 
     CLICKED=0
+
+    if try_enter_security_key_pin; then
+        sleep 3
+    fi
 
     if [ "$HAS_JAUTO" = "1" ]; then
         for q in \
