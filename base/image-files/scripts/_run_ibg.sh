@@ -504,6 +504,56 @@ function __maintenance_handle_relogin_warning {
 }
 
 
+function __maintenance_handle_passkey {
+    # Handle IB Gateway's custom Swing Authenticate button. It is usually
+    # twslaunch.jtscomponents.J rather than javax.swing.JButton, so match the
+    # text and coordinates just like the other maintenance handlers.
+    if [ "${PASSKEY_ENABLED:-0}" != "1" ]; then
+        return
+    fi
+
+    local OUTPUT=$(_call_jauto "list_ui_components?window_class=twslaunch.jauthentication&window_type=dialog")
+    if [ "$OUTPUT" != "none" ]; then
+        local COMPONENT
+        while IFS= read -r COMPONENT; do
+            [ -z "$COMPONENT" ] && continue
+            local -A PROPS="$(_jauto_parse_props $COMPONENT)"
+            if [[ "${PROPS['text']:-}" == *"Authenticate"* ]]; then
+                _info "  - passkey Authenticate button found; clicking ...\n"
+                xdotool mousemove "${PROPS['mx']}" "${PROPS['my']}" click 1
+                sleep 0.25
+                break
+            fi
+        done <<< "$OUTPUT"
+    fi
+
+    # Chromium's security-key PIN prompt is not exposed through JAuto. Enter
+    # the PIN from the read-only secret mounted into the IB Gateway container.
+    # Never print the PIN itself.
+    local PIN_FILE="${FIDO2_PIN_FILE:-/run/secrets/fido2_pin}"
+    if [ ! -r "$PIN_FILE" ]; then
+        return
+    fi
+    local FIDO2_PIN
+    IFS= read -r FIDO2_PIN < "$PIN_FILE" || true
+    [ -n "$FIDO2_PIN" ] || return
+
+    local WIN_IDS WIN
+    WIN_IDS="$(xdotool search --name -i 'PIN required' 2>/dev/null; \
+              xdotool search --name -i 'security key' 2>/dev/null)"
+    [ -n "$WIN_IDS" ] || return
+    WIN="$(printf '%s\n' "$WIN_IDS" | head -1 | tr -d '[:space:]')"
+    [ -n "$WIN" ] || return
+
+    _info "  - security-key PIN dialog found; entering configured PIN ...\n"
+    xdotool windowactivate --sync "$WIN" 2>/dev/null || true
+    xdotool windowfocus "$WIN" 2>/dev/null || true
+    xdotool type --window "$WIN" --delay 50 -- "$FIDO2_PIN"
+    xdotool key --window "$WIN" Return
+    unset FIDO2_PIN
+}
+
+
 function __maintenance_handle_welcome {
     local OUTPUT=$(_call_jauto "list_ui_components?window_class=twslaunch.feature.welcome.")
     if [ "$OUTPUT" != "none" ]; then
@@ -880,6 +930,7 @@ function _maintenance_cycle {
         if [ $G_LOGIN_FAILED -lt 2 ]; then
             __maintenance_handle_login_failed
         fi
+        __maintenance_handle_passkey
         if [ $G_PAPER_TRADING_WARNING_DONE -lt 2 ]; then
             __maintenance_handle_paper_trading_warning
         fi
