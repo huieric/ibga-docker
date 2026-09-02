@@ -523,7 +523,9 @@ function __maintenance_handle_passkey {
                 _info "  - passkey Authenticate button found; clicking ...\n"
                 xdotool mousemove "${PROPS['mx']}" "${PROPS['my']}" click 1
                 G_PASSKEY_AUTH_CLICKED=1
-                sleep 0.25
+                # Allow the JxBrowser page to load and reach the security-key
+                # PIN prompt before the next maintenance pass tries to type.
+                sleep 2
                 break
             fi
         done <<< "$OUTPUT"
@@ -564,16 +566,11 @@ function __maintenance_handle_passkey {
     _info "  - security-key PIN dialog found; entering configured PIN ...\n"
     xdotool windowactivate --sync "$WIN" 2>/dev/null || true
     xdotool windowfocus "$WIN" 2>/dev/null || true
-    # JxBrowser embeds Chromium's PIN page inside this top-level window, so the
-    # PIN field has no separate X11 title or child window. Click the BrowserView
-    # first, then use Tab navigation and send keys to the active X11 window.
-    # The first Tab handles the common case where Chromium has focused its
-    # dialog; the additional tabs cover versions that focus the page container.
-    eval "$(xdotool getwindowgeometry --shell "$WIN" 2>/dev/null)" 2>/dev/null || true
-    if [ -n "${X:-}" ] && [ -n "${Y:-}" ] && [ -n "${WIDTH:-}" ] && [ -n "${HEIGHT:-}" ]; then
-        xdotool mousemove $((X + WIDTH / 2)) $((Y + HEIGHT / 2)) click 1
-    fi
-    xdotool key Tab
+    # JxBrowser embeds Chromium's PIN page inside this top-level window. Do
+    # not click the BrowserView: its center can contain a page button and the
+    # click may cancel/advance the WebAuthn prompt. Chromium normally focuses
+    # the PIN field when the prompt appears; retain that focus and type.
+    xdotool key --window "$WIN" Tab
     xdotool type --delay 50 -- "$FIDO2_PIN"
     xdotool key Return
     G_PASSKEY_PIN_ENTERED=1
