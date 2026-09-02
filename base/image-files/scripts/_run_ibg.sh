@@ -567,12 +567,11 @@ function __maintenance_handle_passkey {
     xdotool windowactivate --sync "$WIN" 2>/dev/null || true
     xdotool windowfocus "$WIN" 2>/dev/null || true
     # JxBrowser embeds Chromium's PIN page inside this top-level window. Do
-    # not click the BrowserView: its center can contain a page button and the
-    # click may cancel/advance the WebAuthn prompt. Chromium normally focuses
-    # the PIN field when the prompt appears; retain that focus and type.
-    xdotool key --window "$WIN" Tab
-    xdotool type --delay 50 -- "$FIDO2_PIN"
-    xdotool key Return
+    # not click the BrowserView or press Tab: either can move focus away from
+    # Chromium's automatically focused PIN input and make the following text
+    # go nowhere. The WebAuthn PIN page focuses its input when displayed.
+    xdotool type --window "$WIN" --delay 50 -- "$FIDO2_PIN"
+    xdotool key --window "$WIN" Return
     G_PASSKEY_PIN_ENTERED=1
     unset FIDO2_PIN
 }
