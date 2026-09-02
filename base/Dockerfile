@@ -39,15 +39,9 @@ USER ibg
 WORKDIR /home/ibg
 COPY --from=util_build /tmp/show_text /bin
 ADD image-files/scripts /opt/ibga/
-# --- software passkey login (see passkey/) ---
-# Only the "Authenticate" clicker lives here. The passkey authenticator itself
-# is a separate container (github.com/huieric/soft-fido2) served over USB/IP;
-# the IB Gateway container just needs `devices: [/dev/bus/usb]` to see it.
-ADD image-files/passkey /opt/ibga/passkey/
 RUN sudo chmod a+rx /bin/show_text && \
     sudo chmod a+rx /opt/jauto.so && \
-    sudo chmod a+rx /opt/ibga/* && \
-    sudo chmod a+rx /opt/ibga/passkey/*.sh
+    sudo chmod a+rx /opt/ibga/*
 
 COPY image-files/healthcheck.py /opt/healthcheck.py
 COPY image-files/account_report.py /opt/account_report.py
