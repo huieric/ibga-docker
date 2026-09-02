@@ -538,16 +538,24 @@ function __maintenance_handle_passkey {
     # the PIN from the read-only secret mounted into the IB Gateway container.
     # Never print the PIN itself.
     local PIN_FILE="${FIDO2_PIN_FILE:-/run/secrets/fido2_pin}"
-    if [ ! -r "$PIN_FILE" ]; then
+    if [ ! -e "$PIN_FILE" ]; then
+        if [ "${G_PASSKEY_PIN_SECRET_WARNED:-0}" -eq 0 ]; then
+            _err "  - FIDO2 PIN secret is missing: $PIN_FILE\n"
+            G_PASSKEY_PIN_SECRET_WARNED=1
+        fi
         return
     fi
     local FIDO2_PIN
-    IFS= read -r FIDO2_PIN < "$PIN_FILE" || true
+    # The bind-mounted secret is intentionally root:root 0600. The ibg user
+    # has passwordless sudo inside the container, so read it as root without
+    # weakening host-side permissions.
+    FIDO2_PIN="$(sudo cat "$PIN_FILE" 2>/dev/null)"
     [ -n "$FIDO2_PIN" ] || return
 
     local WIN_IDS WIN
-    WIN_IDS="$(xdotool search --name -i 'PIN required' 2>/dev/null; \
-              xdotool search --name -i 'security key' 2>/dev/null)"
+    WIN_IDS="$(xdotool search --onlyvisible --name '^Passkey Authentication$' 2>/dev/null; \
+              xdotool search --onlyvisible --name -i 'PIN required' 2>/dev/null; \
+              xdotool search --onlyvisible --name -i 'security key' 2>/dev/null)"
     [ -n "$WIN_IDS" ] || return
     [ "${G_PASSKEY_PIN_ENTERED:-0}" -eq 0 ] || return
     WIN="$(printf '%s\n' "$WIN_IDS" | head -1 | tr -d '[:space:]')"
@@ -556,6 +564,9 @@ function __maintenance_handle_passkey {
     _info "  - security-key PIN dialog found; entering configured PIN ...\n"
     xdotool windowactivate --sync "$WIN" 2>/dev/null || true
     xdotool windowfocus "$WIN" 2>/dev/null || true
+    # JxBrowser embeds Chromium's PIN prompt inside this top-level window.
+    # Chromium normally autofocuses the PIN field, so type directly into the
+    # active window rather than searching for a separate X11 child title.
     xdotool type --window "$WIN" --delay 50 -- "$FIDO2_PIN"
     xdotool key --window "$WIN" Return
     G_PASSKEY_PIN_ENTERED=1
@@ -1021,6 +1032,7 @@ MSG="---------------------------------------------------
             G_LOGIN_AGAIN=0
             G_PASSKEY_AUTH_CLICKED=0
             G_PASSKEY_PIN_ENTERED=0
+            G_PASSKEY_PIN_SECRET_WARNED=0
             G_WELCOME_MESSAGE=""
             _info "• filling in login form ...\n"
             _login_toggle "$IB_LOGINTAB"
