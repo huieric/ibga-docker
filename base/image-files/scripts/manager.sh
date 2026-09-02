@@ -36,9 +36,41 @@ MSG="------------------------------------------------
 _info "$MSG"
 
 # Passkey Authenticate/PIN handling is performed by _maintenance_cycle in
-# _run_ibg.sh, alongside the other mature login-window automation. Do not
-# start the legacy standalone passkey loop here; two automation loops racing
-# over the same dialog can leave Chromium waiting for a PIN.
+# _run_ibg.sh. Device-node maintenance remains a separate background concern:
+# every host usbip re-attach may allocate a new hidraw minor, while the
+# container has its own /dev tmpfs. Keep the matching node synchronized so
+# Chromium can enumerate the authenticator.
+if [ "${PASSKEY_ENABLED:-0}" = "1" ]; then
+    (
+        while :; do
+            FOUND_NODE=""
+            for d in /sys/class/hidraw/hidraw*; do
+                [ -e "$d" ] || continue
+                if [ -r "$d/device/uevent" ] && \
+                   grep -qi 'HID_NAME=soft-fido2' "$d/device/uevent" 2>/dev/null; then
+                    FOUND_NODE="$d"
+                    break
+                fi
+            done
+
+            if [ -n "$FOUND_NODE" ]; then
+                HRN="$(basename "$FOUND_NODE")"
+                MAJMIN="$(cat "$FOUND_NODE/dev" 2>/dev/null)"
+                MAJ="${MAJMIN%%:*}"
+                MIN="${MAJMIN##*:}"
+                EXPECTED="$(printf '%x:%x' "$MAJ" "$MIN")"
+                ACTUAL="$(stat -c '%t:%T' "/dev/$HRN" 2>/dev/null || true)"
+                if [ "$ACTUAL" != "$EXPECTED" ]; then
+                    sudo rm -f "/dev/$HRN"
+                    if sudo mknod -m 666 "/dev/$HRN" c "$MAJ" "$MIN"; then
+                        _info "• passkey device node /dev/$HRN synchronized ($MAJ:$MIN)\n"
+                    fi
+                fi
+            fi
+            sleep 2
+        done
+    ) &
+fi
 
 _run_socat
 _run_ibg
