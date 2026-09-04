@@ -4,6 +4,12 @@
 
 > 镜像：`ghcr.io/huieric/ibkr` · 协议：GPLv3 · 仓库：[github.com/huieric/ibga-docker](https://github.com/huieric/ibga-docker)
 
+### 登录演示
+
+下图是在 noVNC 里录制的完整登录流程：容器启动 → 自动填写账号密码 → Passkey 认证 → 登录成功 → 导出日志。（账号已打码）
+
+![登录演示](docs/images/login-demo.gif)
+
 ---
 
 ## 它解决了什么问题
