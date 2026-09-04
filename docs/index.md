@@ -9,6 +9,8 @@ nav_order: 0
 
 IBGA runs [IB Gateway](https://www.interactivebrokers.com/en/trading/ibgateway-latest.php) in headless mode inside Docker, automating logins, daily restarts, and option dialogs.
 
+> **中文文档**：[zh-CN/index.md](zh-CN/index.md)
+
 IBKR now **mandates passkey** authentication. IBGA handles it unattended by default (`AUTH_METHOD=passkey`), served by the companion [`soft-fido2`](https://github.com/huieric/soft-fido2) container over USB/IP. The legacy TOTP (Mobile Authenticator App) flow is retained as a documented option.
 
 ## Benefits
