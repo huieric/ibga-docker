@@ -1,17 +1,15 @@
 ---
 layout: default
 title: Frequently Asked Questions
-description: Frequently asked questions for IBGA, including bash script and Docker Compose configuration examples.
+description: Frequently asked questions for IBGA.
 nav_order: 3
 ---
 
-# IBGA Frequently Asked Questions
+# FAQ
 {: .no_toc }
 
 <details open markdown="block">
-  <summary>
-    Table of contents
-  </summary>
+  <summary>Table of contents</summary>
   {: .text-delta }
 1. TOC
 {:toc}
@@ -21,185 +19,101 @@ nav_order: 3
 
 ## What OS does IBGA support?
 
-IBGA is a self-sufficient image. It runs on Docker. <a href="https://docs.docker.com/engine/install/" target="_blank">Docker is available on a variety of Linux platforms, macOS, and Windows 10</a>.
+IBGA is a self-contained Docker image. It runs anywhere Docker runs (Linux, macOS, Windows).
 
----
+## How is two-factor authentication handled?
 
-## What makes IBGA different from IBC?
+IBKR now **mandates passkey** authentication; the legacy IB Key push and TOTP flows are no longer offered to most accounts. The default, fully-automated path is the [software passkey (soft-fido2) flow](#how-to-setup-unattended-passkey-software-security-key-login) (`AUTH_METHOD=passkey`).
 
-<a href="https://github.com/IbcAlpha/IBC" target="_blank">IBC</a> automates many aspects of the Interactive Broker trading software. It is, however, not designed to run in a headless server. Before I started on IBGA, I spent plenty of time trying to make IBC work inside a container but couldn't reliably do so.
+For accounts that still expose older flows:
 
-Technically, IBC is a Java program hosting the IB Gateway main class. Certain aspects of IBC can only be done via reverse-engineering how IB Gateway works. IBGA on the other hand, uses two-component automation: one to extract UI coordinates, and another to simulate input. It is a more efficient way to achieve automation, and I don't need to reverse-engineer the app.
+- **TOTP / Mobile Authenticator App** — `AUTH_METHOD=totp` + `TOTP_KEY` (see [below](#how-to-setup-totp-mobile-authenticator-app-automated-login)).
+- **IB Key push** — manual only: open the VNC view and approve on your phone within 2 minutes.
 
----
+The two methods are mutually exclusive: `AUTH_METHOD` is exactly `passkey` (default) or `totp`.
 
-## Can I host IBGA on an internet server?
+## How do I run multiple accounts?
 
-**Not recommended.**{: .text-red-200 } Please refer to [Security](references/security.md) to learn about the potential issues of hosting IBGA on a public server.
+Define one service per account, with distinct names and ports:
 
----
+```yaml
+services:
+  account-a:
+    image: ghcr.io/huieric/ibkr:stable
+    environment:
+      - IB_USERNAME=username_a
+      # ...
+    ports:
+      - "8888:8888"
+      - "6080:6080"
+  account-b:
+    image: ghcr.io/huieric/ibkr:stable
+    environment:
+      - IB_USERNAME=username_b
+      # ...
+    ports:
+      - "8889:8888"
+      - "6081:6080"
+```
 
-## How is two-factor authentication (Interactive Brokers Secure Login System SLS) handled in IBGA?
+Note: live and paper accounts cannot share market-data subscriptions unless both instances share the same MAC address, which IBGA does not currently support.
 
-Interactive Brokers now enforces two-factor authentication for trading. As of 2024/2025, IBKR has **moved to mandatory passkey authentication** — the legacy IB Key push and TOTP flows are no longer offered to most accounts. The current, fully-automated path is therefore the [software passkey (soft-fido2) flow](#how-to-setup-unattended-passkey-software-security-key-login), which IBGA selects by default (`AUTH_METHOD=passkey`).
+## How do I export logs to a custom host directory?
 
-For accounts that still expose the older second-factor flows, IBGA can also automate:
-
-- **TOTP / Mobile Authenticator App** — set `AUTH_METHOD=totp` and provide `TOTP_KEY` (see [below](#how-to-setup-totp-mobile-authenticator-app-automated-login)).
-- **IB Key push** — supported manually only: open the VNC view, tap the notification on your phone, and allow the login within 2 minutes.
-
-The two methods are **mutually exclusive**: set `AUTH_METHOD` to exactly one of `passkey` (default) or `totp`.
-
-> **Important**: IBKR currently **mandates passkey**. TOTP / IB Key are retained here purely as a documented legacy option and may not be available to your account.
-
----
-
-## How do I run multiple instances of IB Gateway on the same server?
-
-In the [example configuration](getting-started/configuring.md#an-example-docker-compose-configuration-file), only one service node (`my-ibga`) is created. Within the context of IBGA, one service is one container running one instance of IB Gateway. Running another instance needs another service node, with different ports. For example:
-
-    version: '2'
-    services:
-      my-ibga:
-        ...
-        environment:
-          ...
-          - IB_USERNAME=username_account1
-          ...
-        ports:
-          - "15800:5800"
-          - "4000:4000"
-      my-other-account:
-        ...
-        environment:
-          ...
-          - IB_USERNAME=username_account2
-          ...
-        ports:
-          - "15801:5800"
-          - "4001:4000"
-
-However, you cannot share live account market data subscriptions with the paper trading account using this method. For market data sharing to work, both IB Gateway instances must share the same <a href="https://en.wikipedia.org/wiki/MAC_address" target="_blank">NIC MAC address</a>, which IBGA does not currently support.
-
----
-
-## How do I export logs to a non-settings directory on the host?
-
-First, log exporting is configured using the [`IBGA_EXPORT_LOGS`](references/config-args.html#IBGA_EXPORT_LOGS) variable. To export into a custom directory, mount it in `docker-compose.yml` like the program and settings directory, and set [`IBGA_LOG_EXPORT_DIR`](references/config-args.html#IBGA_LOG_EXPORT_DIR) respectively:
-
-    version: '2'
-    services:
-      my-ibga:
-        image: ghcr.io/huieric/ibkr
-        environment:
-          ...
-          - IBGA_EXPORT_LOGS=true
-          - IBGA_LOG_EXPORT_DIR=/home/ibg_logs
-        volumes:
-          - ./run/program:/home/ibg
-          - ./run/settings:/home/ibg_settings
-          - ./run/logs:/home/ibg_logs
-
----
-
-## Why Xvfb but not the modern xserver-xorg-video-dummy as the framebuffer?
-
-Mainly the size. Switching to `xserver-xorg-video-dummy` adds about 30MB of additional dependencies to the image without any improvement to the functionality whatsoever.
-
----
-
-## Can I distribute IBGA as a commercial product?
-
-IBGA is available under the [GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html){:target="_blank"} license as well as a commercial license. Users choosing to use IBGA under the free, open-source license must comply with its terms. Alternatively, users may choose to purchase a commercial license, which enables the distribution of IBGA in any form without restrictions.
-
-Please contact `heshiming at gmail dot com` for the commercial licensing option.
-
----
+```yaml
+services:
+  my-ibga:
+    image: ghcr.io/huieric/ibkr:stable
+    environment:
+      - IBGA_EXPORT_LOGS=true
+      - IBGA_LOG_EXPORT_DIR=/home/ibg_logs
+    volumes:
+      - ./run/program:/home/ibg
+      - ./run/settings:/home/ibg_settings
+      - ./run/logs:/home/ibg_logs
+```
 
 ## How to setup TOTP (Mobile Authenticator App) automated login?
 
-> **Legacy option.** IBKR currently mandates passkey authentication. TOTP is
-> documented here as a fallback/legacy option only; it is **not** the
-> recommended path and may not be offered to your account. To use it, set
-> `AUTH_METHOD=totp` and provide `TOTP_KEY`.
+> **Legacy option.** IBKR now mandates passkey. TOTP is documented as a
+> fallback only and may not be offered to your account. Use `AUTH_METHOD=totp`
+> and provide `TOTP_KEY`.
 
-<a href="https://ibkrguides.com/securelogin/sls/mobile-authenticator.htm" target="_blank">IBKR Mobile Authenticator</a> is a form of two-factor authentication via a common standard, software based solution. It generates a 6-digit numeric passcode calculated using a pre-shared secret and the current time.
+TOTP is a 6-digit time-based code generated from a pre-shared secret. To obtain the secret, export it from your Mobile Authenticator app (e.g. 2FAS, which allows secret export), then set:
 
-Since late 2023, new accounts at IBKR would be prompted to use Mobile Authenticator Apps as the first option of second factor login. Upon login, the IBKR Portal will show a QR code (containing a shared secret generated by IBKR) asking you to use an app to scan it, and then enter the 6-digit passcode to confirm.
+```yaml
+services:
+  my-ibga:
+    image: ghcr.io/huieric/ibkr:stable
+    environment:
+      - AUTH_METHOD=totp
+      - TOTP_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+```
 
-In this guide, we will use the <a href="https://2fas.com" target="_blank">2FAS</a> app as the Mobile Authenticator App, because it is open-source and the secret keys can easily be exported. If you choose to use a commercial app such as <a href="https://shieldplanet.com/extract-secret-keys-from-google-authenticator-qr-code/" target="_blank">Google Authenticator</a>, you will generally face some difficulty in exporting those secret keys because the designer of the program does not let you easily move to an alternative (No it has nothing to do with security per se). And even though 2FAS is available on both iOS and Android, it is easier to copy a file from Android as for iOS, you still need to connect a cable and use iTunes to transfer the backup file.
-
-Once you used 2FAS app to obtain Mobile Authenticator access, <a href="https://2fas.com/support/2fas-mobile-app/i-want-to-move-copy-transfer-tokens-codes-between-ios-and-android/">use its export function to export the key to a "local 2FAS backup file"</a>. Copy this .2fas file to a computer. It is in fact a text file which you can open using a text editor. Its content is similar to this:
-
-    { "services":
-      [
-        { "name":"Interactive Brokers",
-          "secret":"XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-          "updatedAt":17249840000000,
-          "otp":
-            {
-              "link":"otpauth://totp/Interactive Brokers:username?secret=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX&issuer=Interactive Brokers",
-              "label":"username",
-              "account":"username",
-              "issuer":"Interactive Brokers",
-              "tokenType":"TOTP",
-              "source":"Link"
-            },
-            "order":{"position":0},"icon":{"selected":"Label","label":{"text":"IN","backgroundColor":"Brown"},"iconCollection":{"id":"id"}}}
-        ],
-      "groups":[],"updatedAt":17249840000000,"schemaVersion":4,"appVersionCode":5000022,"appVersionName":"5.4.5"
-    }
-
-The part marked as "X" in the above content is your 32-character secret key (generated by IBKR, received via the QR code at 2FAS). Once you obtained it, you can use the `TOTP_KEY` environment variable in the docker-compose configuration:
-
-    services:
-      my-ibga:
-        image: ghcr.io/huieric/ibkr
-        environment:
-          ...
-          - AUTH_METHOD=totp
-          - TOTP_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-
-And IBGA will automatically generate and enter the 6-digit passcode for you. Generation of the code is done by a third-party program named <a href="https://www.nongnu.org/oath-toolkit/oathtool.1.html" target="_blank">oathtool</a>.
-
-Note that if your account is already using IB Key or Printed/Digital Keycode Card, there is currently no way to switch to Mobile Authenticator App (as of November 2024).
-
----
+IBGA generates and enters the code automatically using `oathtool`.
 
 ## How to setup unattended passkey (software security key) login?
 
-Interactive Brokers now mandates **passkey** authentication for many accounts; the
-TOTP / IB Key flows that IBGA could automate no longer apply. IBGA supports a
-**software passkey** solution that keeps login fully headless. It is split across
-two cooperating components:
+IBKR mandates passkey authentication. IBGA supports a fully headless software-passkey flow split across two components:
 
-1. **The authenticator** — a separate container,
-   [`huieric/soft-fido2`](https://github.com/huieric/soft-fido2), imports the
-   passkey private key and serves it as a **real USB device over USB/IP**.
-2. **The clicker** — IBGA's `__maintenance_handle_passkey` (in
-   `_run_ibg.sh`) clicks the passkey "Authenticate" button via
-   `xdotool`/JAuto once IB Gateway shows the prompt (enabled with
-   `AUTH_METHOD=passkey`, the default).
+1. **The authenticator** — [`huieric/soft-fido2`](https://github.com/huieric/soft-fido2), which imports the passkey private key and serves it as a real USB device over USB/IP.
+2. **The clicker** — IBGA's `_run_ibg.sh` clicks the "Authenticate" button via `xdotool`/JAuto (`AUTH_METHOD=passkey`, the default).
 
-Why USB/IP: IB Gateway's passkey UI runs in an embedded Chromium that enumerates
-FIDO keys on the **USB bus**; a UHID device (`/dev/uhid`) is invisible to it.
-USB/IP presents the software key as a real USB device, which Chromium can find.
+Why USB/IP: IB Gateway's passkey UI runs in an embedded Chromium that enumerates FIDO keys on the **USB bus**; a UHID device is invisible to it. USB/IP presents the key as a real USB device Chromium can find.
 
 ### 1. Export the passkey private key (once, out-of-band)
 
-On a machine where you can interact with a terminal (this step is interactive and
-is done **outside** the container):
+On a machine where you can interact with a terminal (outside the container):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/leeguooooo/bitwarden-use/main/install.sh | sh
 bwu config set email <your-bitwarden-email>
-bwu unlock           # prompts for your master password
-bwu fido2 list       # find the IBKR passkey entry
-bwu fido2 get "<entry-name>" > ibkr_passkey.txt   # raw key:value output, no conversion
+bwu unlock
+bwu fido2 list
+bwu fido2 get "<entry-name>" > ibkr_passkey.txt   # raw key:value output
 ```
 
-Keep the raw `bwu fido2 get` output as-is — soft-fido2 parses it directly
-(no JSON conversion). It looks like:
+Keep the raw `bwu fido2 get` output as-is — soft-fido2 parses it directly (no JSON conversion). It looks like:
 
 ```
 name: example-ibkr
@@ -214,21 +128,14 @@ privateKey (base64url): <redacted>
 -----END PRIVATE KEY-----
 ```
 
-The key material does not rotate, so you only need to do this once.
-
 > **Register the passkey in Bitwarden first**: IBKR enforces a strict
 > `allowList` on `getAssertion` — the authenticator may only return a
 > credential whose ID IBKR issued to *this* account, and the browser checks
-> that list locally. A credential registered elsewhere (e.g. Windows Hello on
-> another machine) will not be in the list, so the login fails with
-> "Try a different security key". Register a new passkey for the account in
-> the Bitwarden extension, then export it with the steps above.
+> that list locally. A credential registered elsewhere will not be in the
+> list, so the login fails with "Try a different security key". Register a new
+> passkey for the account in the Bitwarden extension, then export it.
 
 ### 2. Run the soft-fido2 authenticator container
-
-The authenticator imports the exported file and serves it as a real USB device
-over USB/IP (port `3240`, host network). Create a `compose.yml` next to your
-ibga compose file:
 
 ```yaml
 services:
@@ -244,76 +151,48 @@ services:
 
 ```bash
 docker compose up -d
-docker compose logs -f soft-fido2   # expect "USB/IP authenticator listening on 0.0.0.0:3240"
 ```
 
 ### 3. Attach it as a real USB device on the host
 
 ```bash
 sudo modprobe vhci-hcd
-sudo usbip list -r 127.0.0.1
 sudo usbip attach -r 127.0.0.1 -b 1-1.1
 lsusb -v -d 3713:3713   # should show the virtual FIDO2 device
 ```
 
-> Repeat after a reboot or container restart (the `vhci-hcd` module and the
-> `usbip attach` binding do not persist). To load the module at boot, run once:
-> `echo vhci-hcd | sudo tee /etc/modules-load.d/vhci-hcd.conf`.
-> `usbip` ships in `linux-tools-generic` (Debian/Ubuntu); `vhci-hcd` is in
-> `linux-modules-extra` on Ubuntu/AWS.
+> Repeat after a reboot or container restart. To load the module at boot:
+> `echo vhci-hcd | sudo tee /etc/modules-load.d/vhci-hcd.conf`. `usbip` ships
+> in `linux-tools-generic`; `vhci-hcd` is in `linux-modules-extra` (Ubuntu/AWS).
+> For automatic re-attach, use soft-fido2's `usbip-watchdog.service`.
 
 ### 4. Give IB Gateway access to the virtual USB device
-
-After `usbip attach`, the virtual key appears on the host as a real USB device
-under `/dev/bus/usb/...`. Expose that directory as a **live bind mount** (a
-`devices:` entry snapshots devices at container creation and will not see the
-dynamically-attached USB/IP device) and permit the USB device major number:
 
 ```yaml
 services:
   my-ibga:
-    image: ghcr.io/huieric/ibkr
+    image: ghcr.io/huieric/ibkr:stable
     volumes:
       - /dev/bus/usb:/dev/bus/usb   # live view of host USB devices
     device_cgroup_rules:
       - 'c 189:* rwm'               # USB device nodes use major 189
-      - 'c 239:* rwm'               # hidraw (usbhid) nodes — IB Gateway's embedded
-                                    # Chromium discovers FIDO keys via /dev/hidraw*
+      - 'c 239:* rwm'               # hidraw (usbhid) nodes
     environment:
       - AUTH_METHOD=passkey
       # ... other IB_* variables ...
 ```
 
-> **Why hidraw too**: IB Gateway's passkey UI runs in an embedded Chromium that
-> enumerates FIDO keys through `/dev/hidraw*` (the usbhid subsystem), not
-> `/dev/bus/usb`. The host's usbhid driver creates `/dev/hidrawN` for the
-> USB/IP device; `manager.sh` (when `AUTH_METHOD=passkey`) automatically `mknod`s
-> that node inside the container, and the `c 239:*` cgroup rule above is what
-> actually permits I/O on it. The hidraw major number is dynamic (usually 239;
-> check with `grep hidraw /proc/devices` on the host if it differs).
-
-> **Startup order** (across two compose files): keep the two projects
-> **independent** — do not merge them with `include:` and do not add
-> `depends_on`. `include:` would pull soft-fido2 into this project and start it
-> a second time; `depends_on` can only reference services within one project.
-> No Compose ordering is needed: soft-fido2 is self-sufficient (a host-side
-> systemd/watchdog runs `usbip attach`), and IB Gateway retries its login until
-> the key is available. Start them independently:
->
-> ```bash
-> docker compose -f <soft-fido2>/compose.yml up -d   # watchdog attaches the key
-> docker compose -f <ibga>/compose.yml up -d
-> ```
+> Chromium enumerates FIDO keys through both `/dev/bus/usb` (libusb) and
+> `/dev/hidraw*` (usbhid). `manager.sh` (when `AUTH_METHOD=passkey`)
+> automatically `mknod`s the hidraw node inside the container; the `c 239:*`
+> rule permits I/O on it. The hidraw major is usually 239 (`grep hidraw
+> /proc/devices`).
 
 ### 5. Verify
 
-Start both containers. IB Gateway should log in automatically: IBGA enters the
-credentials, the clicker presses "Authenticate", and the soft-fido2 container
-signs the WebAuthn challenge. Check the logs:
+Start both containers. IBGA enters credentials, clicks "Authenticate", and soft-fido2 signs the WebAuthn challenge. Check:
 
 ```bash
-docker compose logs soft-fido2       # "loaded passkey rpId=..." + "listening on 0.0.0.0:3240"
-docker exec <ibga> sh -c 'ls /dev/bus/usb/*/* 2>/dev/null'   # the virtual device node
+docker compose logs soft-fido2
+docker exec <ibga> sh -c 'ls /dev/bus/usb/*/* 2>/dev/null'
 ```
-
-

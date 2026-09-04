@@ -1,56 +1,54 @@
 ---
 layout: default
 title: Docker Basics
-description: Docker Compose basics for IBGA, with primer on environment variables, volumes and ports.
+description: Docker Compose basics for IBGA
 parent: References
 nav_order: 0
 ---
 
 # Docker Compose Basics
 
-This section discusses the basics of a Docker Compose configuration, including mechanisms such as `volumes`, `ports`, `restart`, etc. For IBGA-specific `IB_*` arguments (in fact, environment variables), refer to [IBGA Configuration Arguments](config-args.md). 
+This section covers the basics of a Docker Compose configuration for IBGA. For the full IBGA-specific environment variables, see [Configuration Arguments](config-args.md).
 
-## Configuration Staples
+## The example, explained
 
-<a href="https://docs.docker.com/compose/compose-file/" target="_blank">Docker compose file specification</a> is a very long read. But you don't need all that to start using IBGA. Just consider a few sections of this example as staples. For instance:
+```yaml
+services:
+  my-ibga:
+    image: ghcr.io/huieric/ibkr:stable
+    restart: unless-stopped
+    environment:
+      - IB_USERNAME=username
+      # ...
+    volumes:
+      - ./run/program:/home/ibg
+      - ./run/settings:/home/ibg_settings
+    ports:
+      - "8888:8888"
+      - "6080:6080"
+```
 
-* `version: '2'` on the first line, don't change that
-* `services:` on the second
-* `my-ibga:` is the name of the service (also used as an auto-generated container name), which is used as an identifier of the instance within the docker context. If you plan on running multiple instances, give each a clear name such as `my-roth-account`. Note there are 2 spaces before the name, indicating that the `my-ibga` node is a child node under `services`, by YAML format.
-* `image: ghcr.io/huieric/ibkr` means that the container will use the IBGA Docker image, which can be [pulled automatically from the GitHub Container Registry](docker-image.md#obtaining-the-ibga-image-from-github-container-registry) or [built locally](docker-image.md#building-the-image). Note the four spaces ahead of `image` means that the `image` node is under `my-ibga`.
-* `restart: unless-stopped` means unless you manually stop the container, Docker will always try to start it up. It applies to both instances being stopped due to a reboot or crash.
-
-## Environment Variables
-
-The `environment` section defines the environment variables. `TERM=xterm` is for colorful log output from the Docker console. And the rest of the variables are explained in the [IBGA Configuration Arguments](config-args.md) section.
-
-Refer to the <a href="https://docs.docker.com/compose/compose-file/#environment">official documentation</a> for technical details about environment variables.
+* `services.my-ibga` — the service name (also used as the container name). Use a distinct name per instance if running multiple accounts.
+* `image` — the IBGA image, pulled automatically from the GitHub Container Registry.
+* `restart: unless-stopped` — Docker restarts the container after a reboot or crash.
+* `environment` — IBGA configuration; see [Configuration Arguments](config-args.md).
+* `volumes` — bind-mounts mapping host dirs into the container. These two make the container disposable: IB Gateway lives in `/home/ibg`, settings in `/home/ibg_settings`.
+* `ports` — `host:container` mapping. `8888` is the IB API socket, `6080` is the noVNC browser view.
 
 ## Volumes
 
-The `volumes` section defines file system mapping between a host and a container. Since the container is like a virtual machine, its hard drive is a "disk image" (a big file). Accessing its files is typically complex. Docker's <a href="https://docs.docker.com/storage/bind-mounts/" target="_blank">bind mounts</a> mechanism enables "mounting" a host directory for access inside the container so that the files used in the container reflect on the host. Bind mounts makes the container disposable, which means you can safely delete an IBGA container or its image without losing your IB Gateway program files or settings. To upgrade IBGA, delete the container and the image to let Docker reload. To move your setup to another machine, copy the folders in the `volumes` section over.
+```yaml
+- ./run/program:/home/ibg
+- ./run/settings:/home/ibg_settings
+```
 
-In the example, there are two bind mount directories:
-
-    - ./run/program:/home/ibg
-    - ./run/settings:/home/ibg_settings
-
-It means to map `./run/program` on the host to `/home/ibg` in the container, and map `./run/settings` on the host to `/home/ibg_settings` in the container, where `./` on the host is the directory where `docker-compose.yml` is located. The syntax is `host_dir:container_dir`.
-
-IBGA installs IB Gateway into its `/home/ibg` directory, and redirects its user settings (from the settings Dialog) to `/home/ibg_settings`. These directories can be empty upon container start. In which case, IBGA will install IB Gateway into `./run/settings`, and save user settings into `./run/settings` respectively.
-
-Refer to the <a href="https://docs.docker.com/compose/compose-file/#volumes">official documentation</a> for technical details about volumes.
+Maps host `./run/program` to container `/home/ibg` (IB Gateway install dir) and `./run/settings` to `/home/ibg_settings` (user settings). Delete the container and image freely — data survives in these directories, and copying them to another machine migrates the setup.
 
 ## Ports
 
-Due to Docker's firewall-style default networking, ports inside the container are not exposed externally by default. You can only access the container from outside after port mapping. The `ports` section defines the port mapping between the host and the container. Its syntax is `host_port:container_port`.
+```yaml
+- "8888:8888"   # IB API
+- "6080:6080"   # noVNC
+```
 
-In the example, there are two port mappings:
-
-    - "15800:5800"
-    - "4000:4000"
-
-It means to map host port `15800` to container port `5800` and host port `4000` to container port `4000`. So if your server IP address is `192.168.1.100`, this enables access to `192.168.1.100:15800`. IBGA's port `5800` container port is an HTTP server with <a href="https://en.wikipedia.org/wiki/Virtual_Network_Computing" target="_blank">VNC</a> access from a browser. Visit `http://192.168.1.100:15800` to see the live actions of IBGA running. IBGA's port `4000` is IB Gateway's API socket port, which you can connect from an API client.
-
-Refer to the <a href="https://docs.docker.com/compose/compose-file/#ports">official documentation</a> for technical details about ports.
-
+`host_port:container_port`. Visit `http://<host>:6080` to watch IB Gateway live. Point your API client at `http://<host>:8888`.
