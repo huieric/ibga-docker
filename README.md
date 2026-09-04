@@ -1,5 +1,10 @@
 # ibga-docker
 
+[中文](README.md) · [English](README.en.md)
+
+> **Forked from** [heshiming/ibga](https://github.com/heshiming/ibga) (GPLv3)。
+> `upstream` 远程指向该上游项目；本仓库在其基础上做了容器化、CI/CD、双通道镜像与 Passkey 无人值守登录等工程化增强。
+
 把盈透证券 IB Gateway 装进 Docker 容器的一行启动方案，实现 **7×24 小时无人值守**运行。
 
 > 镜像：`ghcr.io/huieric/ibkr` · 协议：GPLv3 · 仓库：[github.com/huieric/ibga-docker](https://github.com/huieric/ibga-docker)
