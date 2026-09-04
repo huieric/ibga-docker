@@ -360,6 +360,19 @@ IBGA 容器 → IB Gateway（内嵌 Chromium 枚举到密钥）→ 完成签名�
 
 完整步骤（导出密钥、启动 soft-fido2、`usbip attach`、bind mount `/dev/bus/usb`）见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)。
 
+> **容器内置 Chromium**：镜像里预装了 Chromium，便于在容器内打开 IBKR Client
+> Portal（例如注册新的 passkey）。运行：
+>
+> ```bash
+> docker exec -d <ibga> bash -c 'export DISPLAY=:0; \
+>   chromium --no-sandbox --disable-gpu --user-data-dir=/home/ibg/.chromium-profile \
+>   https://ndcdyn.interactivebrokers.com/sso/Login'
+> ```
+>
+> 容器内**不安装 Firefox**：Firefox 的 WebAuthn 路由会强制 `transports`
+> 平台规则，导致 USB/IP 呈现的 passkey 无法被识别；Chromium 则能正常枚举。
+> 通过 noVNC（浏览器打开 `http://服务器IP:15800`）即可操作这个 Chromium 窗口。
+
 ---
 
 ## 安全注意事项

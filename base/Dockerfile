@@ -17,7 +17,13 @@ RUN apt-get update && \
     libasound2 \
     libnss3 \
     libgbm1 \
-    libnspr4 && \
+    libnspr4 \
+    # Chromium is kept in the image so IBKR Client Portal can be opened inside
+    # the container (e.g. to register a passkey). Firefox is intentionally NOT
+    # installed: its WebAuthn routing enforces platform-transport rules that
+    # prevent USB/IP passkeys from being reached.
+    chromium \
+    openssl && \
     python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir ib-insync pandas && \
     apt-get clean && \
@@ -28,7 +34,12 @@ RUN useradd -ms /bin/bash -u 2000 ibg && \
 WORKDIR /opt
 RUN git clone --depth 1 https://github.com/novnc/noVNC.git && \
     chmod +x ./noVNC/utils/novnc_proxy && \
-    git clone --depth 1 https://github.com/novnc/websockify.git ./noVNC/utils/websockify
+    git clone --depth 1 https://github.com/novnc/websockify.git ./noVNC/utils/websockify && \
+    # Pre-generate the self-signed cert noVNC looks for, silencing its
+    # "Warning: could not find self.pem" at startup.
+    openssl req -new -x509 -days 3650 -nodes \
+        -subj "/CN=noVNC" \
+        -out ./noVNC/self.pem -keyout ./noVNC/self.pem 2>/dev/null
 COPY image-files/index.html ./noVNC
 ENV JAUTO_VER=1.0.1
 RUN curl -Lk https://github.com/huieric/jauto/releases/download/v$JAUTO_VER/jauto-v$JAUTO_VER-linux-x86_64.tar.gz -o jauto.tar.gz && \

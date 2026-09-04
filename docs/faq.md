@@ -171,8 +171,10 @@ two cooperating components:
 1. **The authenticator** — a separate container,
    [`huieric/soft-fido2`](https://github.com/huieric/soft-fido2), imports the
    passkey private key and serves it as a **real USB device over USB/IP**.
-2. **The clicker** — IBGA's `click_authenticate.sh` clicks the passkey
-   "Authenticate" button via `xdotool`/JAuto once IB Gateway shows the prompt.
+2. **The clicker** — IBGA's `__maintenance_handle_passkey` (in
+   `_run_ibg.sh`) clicks the passkey "Authenticate" button via
+   `xdotool`/JAuto once IB Gateway shows the prompt (enabled with
+   `PASSKEY_ENABLED=1`).
 
 Why USB/IP: IB Gateway's passkey UI runs in an embedded Chromium that enumerates
 FIDO keys on the **USB bus**; a UHID device (`/dev/uhid`) is invisible to it.
@@ -188,26 +190,38 @@ curl -fsSL https://raw.githubusercontent.com/leeguooooo/bitwarden-use/main/insta
 bwu config set email <your-bitwarden-email>
 bwu unlock           # prompts for your master password
 bwu fido2 list       # find the IBKR passkey entry
-bwu fido2 get "<entry-name>"   # shows privateKeyPem, credentialId, rpId, userHandle
+bwu fido2 get "<entry-name>" > ibkr_passkey.txt   # raw key:value output, no conversion
 ```
 
-Assemble the output into `ibkr_passkey.json`:
+Keep the raw `bwu fido2 get` output as-is — soft-fido2 parses it directly
+(no JSON conversion). It looks like:
 
-```json
-{
-  "name": "<entry-name>",
-  "credentialId": "<base64url>",
-  "rpId": "interactivebrokers.com.hk",
-  "userHandle": "<base64url>",
-  "privateKeyPem": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
-}
+```
+name: IBKR-trader
+credentialId: 8f2f1b74-012e-4344-90e6-ff808c1eecd5
+rpId: interactivebrokers.com.hk
+userHandle: 1Ssnr-E_lIGEvjuKztQCLw
+keyType: public-key
+keyCurve: P-256
+privateKey (base64url): MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg...
+-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----
 ```
 
 The key material does not rotate, so you only need to do this once.
 
+> **Register the passkey in Bitwarden first**: IBKR enforces a strict
+> `allowList` on `getAssertion` — the authenticator may only return a
+> credential whose ID IBKR issued to *this* account, and the browser checks
+> that list locally. A credential registered elsewhere (e.g. Windows Hello on
+> another machine) will not be in the list, so the login fails with
+> "Try a different security key". Register a new passkey for the account in
+> the Bitwarden extension, then export it with the steps above.
+
 ### 2. Run the soft-fido2 authenticator container
 
-The authenticator imports `ibkr_passkey.json` and serves it as a real USB device
+The authenticator imports the exported file and serves it as a real USB device
 over USB/IP (port `3240`, host network). Create a `compose.yml` next to your
 ibga compose file:
 
@@ -218,7 +232,9 @@ services:
     network_mode: host
     restart: unless-stopped
     volumes:
-      - ./ibkr_passkey.json:/run/secrets/ibkr_passkey.json:ro
+      - ./ibkr_passkey.txt:/run/fido/ibkr_passkey.txt:ro
+    environment:
+      SOFT_FIDO2_IMPORT_FILE: /run/fido/ibkr_passkey.txt
 ```
 
 ```bash
@@ -266,10 +282,10 @@ services:
 > **Why hidraw too**: IB Gateway's passkey UI runs in an embedded Chromium that
 > enumerates FIDO keys through `/dev/hidraw*` (the usbhid subsystem), not
 > `/dev/bus/usb`. The host's usbhid driver creates `/dev/hidrawN` for the
-> USB/IP device; `start_passkey.sh` automatically `mknod`s that node inside the
-> container, and the `c 239:*` cgroup rule above is what actually permits I/O on
-> it. The hidraw major number is dynamic (usually 239; check with
-> `grep hidraw /proc/devices` on the host if it differs).
+> USB/IP device; `manager.sh` (when `PASSKEY_ENABLED=1`) automatically `mknod`s
+> that node inside the container, and the `c 239:*` cgroup rule above is what
+> actually permits I/O on it. The hidraw major number is dynamic (usually 239;
+> check with `grep hidraw /proc/devices` on the host if it differs).
 
 > **Startup order** (across two compose files): keep the two projects
 > **independent** — do not merge them with `include:` and do not add
