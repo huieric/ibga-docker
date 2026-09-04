@@ -202,15 +202,15 @@ Keep the raw `bwu fido2 get` output as-is — soft-fido2 parses it directly
 (no JSON conversion). It looks like:
 
 ```
-name: IBKR-trader
-credentialId: 8f2f1b74-012e-4344-90e6-ff808c1eecd5
+name: example-ibkr
+credentialId: 01234567-89ab-cdef-0123-456789abcdef
 rpId: interactivebrokers.com.hk
-userHandle: 1Ssnr-E_lIGEvjuKztQCLw
+userHandle: <redacted>
 keyType: public-key
 keyCurve: P-256
-privateKey (base64url): MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg...
+privateKey (base64url): <redacted>
 -----BEGIN PRIVATE KEY-----
-...
+<redacted>
 -----END PRIVATE KEY-----
 ```
 
