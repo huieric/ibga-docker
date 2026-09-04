@@ -577,7 +577,21 @@ function __maintenance_handle_welcome {
         fi
         # handle Mobile Authenticator app code (legacy; only when AUTH_METHOD=totp)
         if [ "${AUTH_METHOD:-passkey}" = "totp" ] && [ ! -z "$TOTP_KEY" ]; then
-            local WINDOW_CLASS="twslaunch.jutils.aR"
+            # IB Gateway obfuscates the TOTP entry dialog class and changes it
+            # across releases (was twslaunch.jutils.aR, now aV). Resolve it by its
+            # stable title instead of hard-coding the obfuscated class.
+            local WINDOW_CLASS=""
+            local DIALOGS=$(_call_jauto "get_windows?window_type=dialog")
+            if [ "$DIALOGS" != "none" ] && [ -n "$DIALOGS" ]; then
+                local DLG_LINE
+                DLG_LINE=$(grep -m1 "title:Second Factor Authentication" <<< "$DIALOGS")
+                if [ -n "$DLG_LINE" ]; then
+                    WINDOW_CLASS=$(echo "$DLG_LINE" | cut -d, -f2)
+                fi
+            fi
+            if [ -z "$WINDOW_CLASS" ]; then
+                WINDOW_CLASS="twslaunch.jutils.aV"
+            fi
             local OUTPUT=$(_call_jauto "get_windows?window_class=$WINDOW_CLASS&window_type=dialog")
             if [ "$OUTPUT" != "none" ]; then
                 local OUTPUT=$(_call_jauto "list_ui_components?window_class=$WINDOW_CLASS&window_type=dialog")
