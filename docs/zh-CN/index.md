@@ -1,7 +1,7 @@
 # IB Gateway Automation (IBGA) — 中文文档
 
 > 本目录为 ibga-docker 的**中文文档**，英文文档见上级 `docs/` 目录。
-> 项目 README 见 [中文](../README.md) / [English](../README.en.md)。
+> 项目 README 见 [English](../README.md) / [中文](../README.zh-CN.md)。
 
 ## 目录
 
