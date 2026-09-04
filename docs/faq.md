@@ -6,14 +6,13 @@ nav_order: 3
 ---
 
 # FAQ
-{: .no_toc }
 
-<details open markdown="block">
-  <summary>Table of contents</summary>
-  {: .text-delta }
-1. TOC
-{:toc}
-</details>
+- [What OS does IBGA support?](#what-os-does-ibga-support)
+- [How is two-factor authentication handled?](#how-is-two-factor-authentication-handled)
+- [How do I run multiple accounts?](#how-do-i-run-multiple-accounts)
+- [How do I export logs to a custom host directory?](#how-do-i-export-logs-to-a-custom-host-directory)
+- [How to setup TOTP (Mobile Authenticator App) automated login?](#how-to-setup-totp-mobile-authenticator-app-automated-login)
+- [How to setup unattended passkey (software security key) login?](#how-to-setup-unattended-passkey-software-security-key-login)
 
 ---
 

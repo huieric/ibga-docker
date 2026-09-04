@@ -20,8 +20,8 @@ IBKR now **mandates passkey** authentication. IBGA handles it unattended by defa
 * Automatic handling of paper trading confirmation and options dialogs
 * Automatic daily export of logs
 * Settings retained across upgrades (disposable container design)
-* [Unattended passkey login (soft-fido2)](faq.html#how-to-setup-unattended-passkey-software-security-key-login) — default; IBKR now mandates passkey
-* [Mobile Authenticator App automation (legacy)](faq.html#how-to-setup-totp-mobile-authenticator-app-automated-login)
+* [Unattended passkey login (soft-fido2)](faq.md#how-to-setup-unattended-passkey-software-security-key-login) — default; IBKR now mandates passkey
+* [Mobile Authenticator App automation (legacy)](faq.md#how-to-setup-totp-mobile-authenticator-app-automated-login)
 
 ## Under the hood
 
