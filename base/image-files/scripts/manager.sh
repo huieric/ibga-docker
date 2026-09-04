@@ -40,7 +40,7 @@ _info "$MSG"
 # every host usbip re-attach may allocate a new hidraw minor, while the
 # container has its own /dev tmpfs. Keep the matching node synchronized so
 # Chromium can enumerate the authenticator.
-if [ "${PASSKEY_ENABLED:-0}" = "1" ]; then
+if [ "${AUTH_METHOD:-passkey}" = "passkey" ]; then
     (
         while :; do
             FOUND_NODE=""

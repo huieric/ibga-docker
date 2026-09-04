@@ -9,7 +9,7 @@ nav_order: 0
 
 IBGA is <a href="https://www.interactivebrokers.com/en/trading/ibgateway-latest.php" target="_blank">IB Gateway</a> in headless mode. It is a container image preloaded with scripts for automating user interactions with IBG.
 
-With TOTP (Time-based one-time password/IBKR Mobile Authenticator App) automation and second factor support.
+With second-factor authentication support. IBKR now **mandates passkey**, which IBGA automates by default (`AUTH_METHOD=passkey`, served by the companion [soft-fido2](https://github.com/huieric/soft-fido2) container over USB/IP); the legacy TOTP (Mobile Authenticator App) flow remains as a documented option.
 
 <img src="images/ibga-video.gif">
 
@@ -23,7 +23,8 @@ With TOTP (Time-based one-time password/IBKR Mobile Authenticator App) automatio
 * Automatic daily export of logs
 * Retaining of settings after an upgrade
 * A disposable container design
-* <a href="faq.html#how-to-setup-totp-mobile-authenticator-app-automated-login">Support Mobile Authenticator App automation</a> (as of Nov 3, 2024)
+* <a href="faq.html#how-to-setup-unattended-passkey-software-security-key-login">Support unattended passkey login (soft-fido2)</a> (default; IBKR now mandates passkey)
+* <a href="faq.html#how-to-setup-totp-mobile-authenticator-app-automated-login">Support Mobile Authenticator App automation (legacy)</a> (as of Nov 3, 2024)
 * <a href="faq.html#how-is-two-factor-authentication-interactive-brokers-secure-login-system-sls-handled-in-ibga">Support two-factor authentication</a> (as of Nov 11, 2022)
 
 ## Under the hood:

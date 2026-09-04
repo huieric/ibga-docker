@@ -508,7 +508,7 @@ function __maintenance_handle_passkey {
     # Handle IB Gateway's custom Swing Authenticate button. It is usually
     # twslaunch.jtscomponents.J rather than javax.swing.JButton, so match the
     # text and coordinates just like the other maintenance handlers.
-    if [ "${PASSKEY_ENABLED:-0}" != "1" ]; then
+    if [ "${AUTH_METHOD:-passkey}" != "passkey" ]; then
         return
     fi
 
@@ -618,8 +618,8 @@ function __maintenance_handle_welcome {
                 done
             fi
         fi
-        # handle Mobile Authenticator app code
-        if [ ! -z "$TOTP_KEY" ]; then
+        # handle Mobile Authenticator app code (legacy; only when AUTH_METHOD=totp)
+        if [ "${AUTH_METHOD:-passkey}" = "totp" ] && [ ! -z "$TOTP_KEY" ]; then
             local WINDOW_CLASS="twslaunch.jutils.aR"
             local OUTPUT=$(_call_jauto "get_windows?window_class=$WINDOW_CLASS&window_type=dialog")
             if [ "$OUTPUT" != "none" ]; then
@@ -662,11 +662,8 @@ function __maintenance_handle_welcome {
         if [ "$OUTPUT" != "none" ]; then
             _err "!!! IB Gateway is waiting for two-factor authentication !!!\n"
         fi
-        if [ "$IB_PREFER_IBKEY" == "true" ] || [ ! -z "$TOTP_KEY" ]; then
-            local DEVICE_TO_CLICK=" IB Key"
-            if [ ! -z "$TOTP_KEY" ]; then
-                DEVICE_TO_CLICK=" Mobile Authenticator app"
-            fi
+        if [ "${AUTH_METHOD:-passkey}" = "totp" ] && [ ! -z "$TOTP_KEY" ]; then
+            local DEVICE_TO_CLICK=" Mobile Authenticator app"
             local OUTPUT=$(_call_jauto "list_ui_components?window_class=twslaunch.jauthentication&window_type=dialog")
             if [ "$OUTPUT" != "none" ]; then
                 readarray -t COMPONENTS <<< "$OUTPUT"

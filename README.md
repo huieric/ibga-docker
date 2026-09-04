@@ -96,7 +96,8 @@ services:
       - IB_LOGOFF=11:55 PM         # 自动每天定时重启
       - IB_APILOG=data
       - IB_LOGLEVEL=Error
-      - TOTP_KEY=XXXXXXXXXXXXXX    # 可选：TOTP 密钥，全自动 2FA
+      - AUTH_METHOD=passkey        # 认证方式：passkey（默认，IBKR 现强制）/ totp（旧）
+      # - TOTP_KEY=XXXXXXXXXXXXXX  # 仅 AUTH_METHOD=totp 时需要
     volumes:
       - ./run/program:/home/ibg          # IB Gateway 程序目录（持久化）
       - ./run/settings:/home/ibg_settings # 用户设置目录（持久化）
@@ -137,9 +138,9 @@ docker compose up
 [8] 二次验证（2FA）处理
        │           │
        ▼           ▼
-  [有TOTP密钥]  [无TOTP密钥]
-  oathtool自动  用户通过VNC
-  生成6位码     手机APP确认
+  [Passkey]    [TOTP 旧方式]
+  自动点击      oathtool 自动
+  Authenticate 生成 6 位码
        │           │
        └─────┬─────┘
              ▼
@@ -160,13 +161,12 @@ docker compose up
 
 - **自动安装 & 升级 IB Gateway**：首次运行自动下载，无需手动安装
 - **全自动登录**：用户名、密码、地区全部通过环境变量注入
-- **TOTP 自动化**（最新特性）：提供密钥后，6 位动态验证码由 `oathtool` 自动生成并填入，无需摸手机
-- **Passkey 无人值守登录**：配合独立的 [soft-fido2](https://github.com/huieric/soft-fido2) 容器（软件安全密钥，经 USB/IP 呈现为真实 USB 设备），IBGA 自动点击 Authenticate 按钮完成登录，无需实体 USB Key、无需人工操作（见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)）
+- **Passkey 无人值守登录（默认，IBKR 现强制）**：配合独立的 [soft-fido2](https://github.com/huieric/soft-fido2) 容器（软件安全密钥，经 USB/IP 呈现为真实 USB 设备），IBGA 自动点击 Authenticate 按钮完成登录，无需实体 USB Key、无需人工操作（见 [FAQ：如何配置无人值守 Passkey 登录](docs/faq.md#how-to-setup-unattended-passkey-software-security-key-login)）
+- **TOTP 自动化（旧方式，仅作帮助说明）**：设置 `AUTH_METHOD=totp` 并提供密钥后，6 位动态验证码由 `oathtool` 自动生成并填入；IBKR 已不再对新账户提供该选项
 - **自动处理弹窗**：模拟交易确认框、选项对话框全部自动点击确认
 
-**当没有配置 TOTP 密钥时，登录后 noVNC 界面会显示如下 2FA 等待画面**，此时只需在手机上点一下"允许"即可：
-
-![2FA 等待确认界面（通过 noVNC 在浏览器中看到的画面）](https://heshiming.github.io/ibga/images/two-factor-auth.png)
+> 认证方式通过 `AUTH_METHOD` 环境变量选择：`passkey`（默认）或 `totp`（旧），
+> 二者互斥。当前 IBKR 强制要求 passkey，TOTP 仅作为帮助文档中的历史选项保留。
 
 ### ♾️ 高可用设计
 
@@ -281,7 +281,7 @@ IBGateway 程序和所有用户设置通过 volume 持久化，**升级容器不
 
 ## 与同类方案的对比
 
-| 方案 | 无头运行 | 全自动登录 | TOTP 自动化 | 活跃维护 | 使用难度 |
+| 方案 | 无头运行 | 全自动登录 | Passkey 自动化 | 活跃维护 | 使用难度 |
 |---|---|---|---|---|---|
 | **ibga-docker** | ✅ | ✅ | ✅ | ✅ | 低 |
 | IBC (IBController) | ❌（设计上不支持容器化） | 部分 | ❌ | ✅ | 中 |
@@ -322,7 +322,7 @@ docker compose up -d
 ```bash
 # 浏览器打开 http://你的服务器IP:15800
 # 你会看到 noVNC 画面里 IB Gateway 正在自动完成登录
-# （如配置了 TOTP_KEY，全自动无感；否则第一次需手机点"允许"）
+# （默认 AUTH_METHOD=passkey，配合 soft-fido2 全自动无感）
 ```
 
 **连接你的策略**
@@ -342,7 +342,7 @@ IBKR 现已强制 Passkey 认证，旧的 TOTP / IB Key 自动化不再适用。
 | 组件 | 仓库 | 职责 |
 |---|---|---|
 | **soft-fido2 容器** | [huieric/soft-fido2](https://github.com/huieric/soft-fido2) | 导入 passkey 私钥，经 **USB/IP** 把它呈现为宿主机上的真实 USB 设备 |
-| **IBGA 容器** | 本仓库 | 自动登录 + 点击 passkey「Authenticate」按钮（`PASSKEY_ENABLED=1`） |
+| **IBGA 容器** | 本仓库 | 自动登录 + 点击 passkey「Authenticate」按钮（`AUTH_METHOD=passkey`） |
 
 **为什么用 USB/IP 而非 UHID**：IB Gateway 的 passkey 界面跑在内嵌 Chromium 里，它用 libusb 枚举 **USB 总线** 上的 FIDO 密钥；`/dev/uhid` 造出的虚拟 HID 设备不在 USB 总线上，Chromium 看不到。USB/IP 则把软件密钥变成一个真实 USB 设备（`vendor/product 0x3713`），可被正常枚举。
 

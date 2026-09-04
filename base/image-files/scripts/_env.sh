@@ -8,3 +8,8 @@ IBG_DOWNLOAD_URL="${IBG_DOWNLOAD_URL:-https://download2.interactivebrokers.com/i
 IBGA_LOG_EXPORT_DIR="${IBGA_LOG_EXPORT_DIR:-$IBG_SETTINGS_DIR/exported_logs}"
 SOCAT_PIDFILE=/var/run/socat.pid
 JAUTO_INPUT=/tmp/ibg-jauto.in
+
+# Second-factor authentication method. IBKR currently mandates passkey, so
+# this defaults to "passkey". "totp" is a legacy option for the Mobile
+# Authenticator App. The two are mutually exclusive.
+AUTH_METHOD="${AUTH_METHOD:-passkey}"

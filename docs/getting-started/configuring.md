@@ -34,7 +34,7 @@ The Docker Compose configuration file is in <a href="https://yaml.org/" target="
           - IB_LOGOFF=11:55 PM
           - IB_APILOG=data
           - IB_LOGLEVEL=Error
-          - IB_PREFER_IBKEY=true
+          - AUTH_METHOD=passkey
         volumes:
           - ./run/program:/home/ibg
           - ./run/settings:/home/ibg_settings
