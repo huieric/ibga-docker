@@ -505,13 +505,22 @@ function __maintenance_handle_relogin_warning {
 
 
 function __maintenance_handle_passkey {
-    # Handle IB Gateway's custom Swing Authenticate button. It is usually
-    # twslaunch.jtscomponents.J rather than javax.swing.JButton, so match the
-    # text and coordinates just like the other maintenance handlers.
+    # Handle IB Gateway's Passkey (WebAuthn) second factor. When the server
+    # last remembered a different device (e.g. TOTP), IB Gateway first shows a
+    # "Second Factor Authentication" dialog that we must switch away from
+    # before the "Authenticate" button appears.
     if [ "${AUTH_METHOD:-passkey}" != "passkey" ]; then
         return
     fi
 
+    # Switch to the Passkey device if the currently shown dialog is for
+    # another authentication method (TOTP entry box, device choice list, ...).
+    # NOTE: the JList row text carries a leading space, hence " Passkey".
+    __maintenance_handle_2fa_switch " Passkey" "Use your Passkey device"
+
+    # Handle IB Gateway's custom Swing Authenticate button. It is usually
+    # twslaunch.jtscomponents.J rather than javax.swing.JButton, so match the
+    # text and coordinates just like the other maintenance handlers.
     local OUTPUT=$(_call_jauto "list_ui_components?window_class=twslaunch.jauthentication&window_type=dialog")
     if [ "$OUTPUT" != "none" ]; then
         local COMPONENT
@@ -533,6 +542,100 @@ function __maintenance_handle_passkey {
         # The second-factor dialog disappeared; allow the next login ceremony
         # to click Authenticate once again.
         G_PASSKEY_AUTH_CLICKED=0
+    fi
+}
+
+
+# __maintenance_handle_2fa_switch "TARGET_DEVICE_TEXT" "TARGET_MARKER"
+# Detects a "Second Factor Authentication" dialog that is NOT already on the
+# target device and walks it to the target device.  IB Gateway 10.50.1e
+# renders two variants of this dialog:
+#   1. A device choice list (window class twslaunch.jauthentication.*) with a
+#      JList of devices and an OK button.
+#   2. A method-specific entry box (TOTP code entry, class twslaunch.jutils.*,
+#      or a Passkey WebAuthn box) that carries a "Change security device" link.
+# TARGET_DEVICE must match the JList row exactly, e.g. "Passkey" or
+# " Mobile Authenticator app".  TARGET_MARKER is a label/button substring that
+# identifies the target device's own dialog (e.g. "Use your Passkey device" or
+# "Enter"), so we do NOT click "Change security device" when we are already on
+# the right dialog.
+function __maintenance_handle_2fa_switch {
+    local TARGET_DEVICE="$1"
+    local TARGET_MARKER="$2"
+
+    # If a method-specific box is showing, only click "Change security device"
+    # when the box is NOT already the target device's box.
+    local COMPONENTS_OUTPUT=$(_call_jauto "list_ui_components?window_type=dialog&window_title=Second Factor Authentication")
+    if [ "$COMPONENTS_OUTPUT" != "none" ]; then
+        local CHANGE_X=0
+        local CHANGE_Y=0
+        local ON_TARGET=0
+        readarray -t COMPONENTS <<< "$COMPONENTS_OUTPUT"
+        for COMPONENT in "${COMPONENTS[@]}"; do
+            local -A PROPS="$(_jauto_parse_props $COMPONENT)"
+            if  [ "${PROPS['F1']}" == "javax.swing.JTextPane" ] && \
+                [[ "${PROPS['text']}" == *"Change security device"* ]]; then
+                CHANGE_X=${PROPS["mx"]}
+                CHANGE_Y=${PROPS["my"]}
+            fi
+            if  [ -n "$TARGET_MARKER" ] && \
+                [[ "${PROPS['text']:-}" == *"$TARGET_MARKER"* ]]; then
+                ON_TARGET=1
+            fi
+        done
+        if [ $CHANGE_X -gt 0 ] && [ $ON_TARGET -eq 0 ]; then
+            _info "  - clicking Change security device at $CHANGE_X,$CHANGE_Y ...\n"
+            xdotool mousemove $CHANGE_X $CHANGE_Y click 1
+            sleep 2
+        fi
+    fi
+
+    # Handle the device choice list, selecting TARGET_DEVICE if it is not
+    # already selected.
+    local OUTPUT=$(_call_jauto "list_ui_components?window_class=twslaunch.jauthentication&window_type=dialog")
+    if [ "$OUTPUT" != "none" ]; then
+        readarray -t COMPONENTS <<< "$OUTPUT"
+        local CIDX=-1
+        local TIDX=-1
+        local OK_X=0
+        local OK_Y=0
+        for COMPONENT in "${COMPONENTS[@]}"; do
+            local -A PROPS="$(_jauto_parse_props $COMPONENT)"
+            if  [ "${PROPS['F1']}" == "javax.swing.JList" ]; then
+                # Focus the listbox first so keyboard navigation works.
+                xdotool mousemove ${PROPS["mx"]} ${PROPS["my"]} click 1
+            fi
+            if  [ "${PROPS['F1']}" == "javax.swing.JList(row)" ] && \
+                [ "${PROPS['selected']}" == "y" ]; then
+                CIDX="${PROPS['F2']}"
+            fi
+            if  [ "${PROPS['F1']}" == "javax.swing.JList(row)" ] && \
+                [ "${PROPS['text']}" == "$TARGET_DEVICE" ]; then
+                TIDX="${PROPS['F2']}"
+            fi
+            if  [ "${PROPS['F1']}" == "javax.swing.JButton" ] && \
+                [ "${PROPS['text']}" == "OK" ]; then
+                OK_X=${PROPS["mx"]}
+                OK_Y=${PROPS["my"]}
+            fi
+        done
+        # Select the target row when a different row is currently selected.
+        if [[ $CIDX -ge 0 ]] && [[ $TIDX -ge 0 ]] && [[ $CIDX -ne $TIDX ]]; then
+            _info "  - selecting $CIDX $TIDX $TARGET_DEVICE"
+            local ACTION_KEY KEY_COUNT
+            read ACTION_KEY KEY_COUNT <<< $(__calc_key_action $CIDX $TIDX)
+            if [[ $KEY_COUNT -gt 0 ]]; then
+                local KEY_SEQ=$(repl "$ACTION_KEY " $KEY_COUNT)
+                xdotool key $KEY_SEQ
+                sleep 0.25
+            fi
+        fi
+        # Confirm with OK only when the target row is already (or now) selected.
+        if [[ $TIDX -ge 0 ]] && [[ $OK_X -gt 0 ]]; then
+            _info "  - two-factor auth, selected $TARGET_DEVICE ...\n"
+            xdotool mousemove $OK_X $OK_Y click 1
+            sleep 1
+        fi
     fi
 }
 
@@ -575,115 +678,6 @@ function __maintenance_handle_welcome {
                 done
             fi
         fi
-        # handle Mobile Authenticator app code (legacy; only when AUTH_METHOD=totp)
-        if [ "${AUTH_METHOD:-passkey}" = "totp" ] && [ ! -z "$TOTP_KEY" ]; then
-            # IB Gateway obfuscates the TOTP entry dialog class and changes it
-            # across releases (was twslaunch.jutils.aR, now aV). Resolve it by its
-            # stable title instead of hard-coding the obfuscated class.
-            local WINDOW_CLASS=""
-            local DIALOGS=$(_call_jauto "get_windows?window_type=dialog")
-            if [ "$DIALOGS" != "none" ] && [ -n "$DIALOGS" ]; then
-                local DLG_LINE
-                DLG_LINE=$(grep -m1 "title:Second Factor Authentication" <<< "$DIALOGS")
-                if [ -n "$DLG_LINE" ]; then
-                    WINDOW_CLASS=$(echo "$DLG_LINE" | cut -d, -f2)
-                fi
-            fi
-            if [ -z "$WINDOW_CLASS" ]; then
-                WINDOW_CLASS="twslaunch.jutils.aV"
-            fi
-            local OUTPUT=$(_call_jauto "get_windows?window_class=$WINDOW_CLASS&window_type=dialog")
-            if [ "$OUTPUT" != "none" ]; then
-                local OUTPUT=$(_call_jauto "list_ui_components?window_class=$WINDOW_CLASS&window_type=dialog")
-                if [ "$OUTPUT" != "none" ]; then
-                    _info "  - handling TOTP Mobile Authenticator\n"
-                    readarray -t COMPONENTS <<< "$OUTPUT"
-                    local RUN_OTP=0
-                    local ACCEPT_OTP=0
-                    for COMPONENT in "${COMPONENTS[@]}"; do
-                        local -A PROPS="$(_jauto_parse_props $COMPONENT)"
-                        if  [ "${PROPS['F1']}" == "javax.swing.JLabel" ] && \
-                            [[ "${PROPS['text']}" == *"Enter"* ]]; then
-                            RUN_OTP=1
-                            _info "    TOTP form identified\n"
-                        fi
-                        if  [ "${PROPS['F1']}" == "javax.swing.JTextField" ] && \
-                            [ "${PROPS['editable']}" == "y" ] && \
-                            [ "$RUN_OTP" == 1 ]; then
-                            xdotool mousemove ${PROPS["mx"]} ${PROPS["my"]} click 1
-                            TOTP_ANSWER=$(oathtool --totp -b "$TOTP_KEY")
-                            sleep 0.25
-                            xdotool type $TOTP_ANSWER
-                            _info "    TOTP answer entered\n"
-                            sleep 0.25
-                            ACCEPT_OTP=1
-                        fi
-                        if  [ "${PROPS['F1']}" == "javax.swing.JButton" ] && \
-                            [ "${PROPS['text']}" == "OK" ] &&
-                            [ "$ACCEPT_OTP" == 1 ]; then
-                            xdotool mousemove ${PROPS["mx"]} ${PROPS["my"]} click 1
-                            _info "    TOTP OK clicked\n"
-                        fi
-                    done
-                fi
-            fi
-        fi
-        # handle two-factor authentication
-        local OUTPUT=$(_call_jauto "get_windows?window_class=twslaunch.jauthentication&window_type=dialog")
-        if [ "$OUTPUT" != "none" ]; then
-            _err "!!! IB Gateway is waiting for two-factor authentication !!!\n"
-        fi
-        if [ "${AUTH_METHOD:-passkey}" = "totp" ] && [ ! -z "$TOTP_KEY" ]; then
-            local DEVICE_TO_CLICK=" Mobile Authenticator app"
-            local OUTPUT=$(_call_jauto "list_ui_components?window_class=twslaunch.jauthentication&window_type=dialog")
-            if [ "$OUTPUT" != "none" ]; then
-                readarray -t COMPONENTS <<< "$OUTPUT"
-                for COMPONENT in "${COMPONENTS[@]}"; do
-                    local -A PROPS="$(_jauto_parse_props $COMPONENT)"
-                    if  [ "${PROPS['F1']}" == "javax.swing.JList" ]; then
-                        xdotool mousemove ${PROPS["mx"]} ${PROPS["my"]} click 1
-                        _info "  - focused on two-factor choice listbox"
-                    fi
-                done
-            fi
-            sleep 0.25
-            local OUTPUT=$(_call_jauto "list_ui_components?window_class=twslaunch.jauthentication&window_type=dialog")
-            if [ "$OUTPUT" != "none" ]; then
-                readarray -t COMPONENTS <<< "$OUTPUT"
-                local CIDX=-1
-                local TIDX=-1
-                for COMPONENT in "${COMPONENTS[@]}"; do
-                    local -A PROPS="$(_jauto_parse_props $COMPONENT)"
-                    if  [ "${PROPS['F1']}" == "javax.swing.JList(row)" ] && \
-                        [ "${PROPS['selected']}" == "y" ]; then
-                        CIDX="${PROPS['F2']}"
-                    fi
-                    if  [ "${PROPS['F1']}" == "javax.swing.JList(row)" ] && \
-                        [ "${PROPS['text']}" == "$DEVICE_TO_CLICK" ]; then
-                        TIDX="${PROPS['F2']}"
-                    fi
-                done
-                if  [[ $CIDX -ge 0 ]] && \
-                    [[ $TIDX -ge 0 ]]; then
-                    _info "  - selecting $CIDX $TIDX $DEVICE_TO_CLICK"
-                    local ACTION_KEY KEY_COUNT
-                    read ACTION_KEY KEY_COUNT <<< $(__calc_key_action $CIDX $TIDX)
-                    if [[ $KEY_COUNT -gt 0 ]]; then
-                        local KEY_SEQ=$(repl "$ACTION_KEY " $KEY_COUNT)
-                        xdotool key $KEY_SEQ
-                    fi
-                    sleep 0.25
-                    for COMPONENT in "${COMPONENTS[@]}"; do
-                        local -A PROPS="$(_jauto_parse_props $COMPONENT)"
-                        if  [ "${PROPS['F1']}" == "javax.swing.JButton" ] && \
-                            [ "${PROPS['text']}" == "OK" ]; then
-                            _info "  - two-factor auth, selected $DEVICE_TO_CLICK ...\n"
-                            xdotool mousemove ${PROPS["mx"]} ${PROPS["my"]} click 1
-                        fi
-                    done
-                fi
-            fi
-        fi
     else
         if [ $G_WELCOME_MESSAGE_DONE -eq 1 ]; then
             G_LOGIN_AGAIN=0
@@ -702,6 +696,77 @@ function __maintenance_handle_welcome {
             if [ $G_LOGIN_AGAIN -eq 0 ]; then
                 G_WELCOME_MESSAGE_DONE=2
             fi
+        fi
+    fi
+}
+
+
+
+function __maintenance_handle_totp {
+    # Handle TOTP (Mobile Authenticator app) two-factor authentication.
+    # When the server last remembered a different device (e.g. Passkey), IB
+    # Gateway first shows a "Second Factor Authentication" dialog that we must
+    # switch away from before the TOTP entry box appears.
+    if [ "${AUTH_METHOD:-passkey}" != "totp" ] || [ -z "$TOTP_KEY" ]; then
+        return
+    fi
+
+    # Switch to the Mobile Authenticator app if the currently shown dialog is
+    # for another authentication method (Passkey WebAuthn box, device choice
+    # list, ...).
+    __maintenance_handle_2fa_switch " Mobile Authenticator app" "Enter"
+
+    # Resolve the TOTP entry dialog by its stable title (the class is
+    # obfuscated and changes across IB Gateway releases, e.g. twslaunch.jutils.aR
+    # -> aV).
+    local WINDOW_CLASS=""
+    local DIALOGS=$(_call_jauto "get_windows?window_type=dialog")
+    if [ "$DIALOGS" != "none" ] && [ -n "$DIALOGS" ]; then
+        local DLG_LINE
+        DLG_LINE=$(grep -m1 "title:Second Factor Authentication" <<< "$DIALOGS")
+        if [ -n "$DLG_LINE" ]; then
+            WINDOW_CLASS=$(echo "$DLG_LINE" | cut -d, -f2)
+        fi
+    fi
+    if [ -z "$WINDOW_CLASS" ]; then
+        WINDOW_CLASS="twslaunch.jutils.aV"
+    fi
+
+    # Handle the TOTP entry dialog (appears after switching, or directly when
+    # the server already remembers TOTP as the last used method).
+    local OUTPUT=$(_call_jauto "get_windows?window_class=$WINDOW_CLASS&window_type=dialog")
+    if [ "$OUTPUT" != "none" ]; then
+        local OUTPUT=$(_call_jauto "list_ui_components?window_class=$WINDOW_CLASS&window_type=dialog")
+        if [ "$OUTPUT" != "none" ]; then
+            _info "  - handling TOTP Mobile Authenticator\n"
+            readarray -t COMPONENTS <<< "$OUTPUT"
+            local RUN_OTP=0
+            local ACCEPT_OTP=0
+            for COMPONENT in "${COMPONENTS[@]}"; do
+                local -A PROPS="$(_jauto_parse_props $COMPONENT)"
+                if  [ "${PROPS['F1']}" == "javax.swing.JLabel" ] && \
+                    [[ "${PROPS['text']}" == *"Enter"* ]]; then
+                    RUN_OTP=1
+                    _info "    TOTP form identified\n"
+                fi
+                if  [ "${PROPS['F1']}" == "javax.swing.JTextField" ] && \
+                    [ "${PROPS['editable']}" == "y" ] && \
+                    [ "$RUN_OTP" == 1 ]; then
+                    xdotool mousemove ${PROPS["mx"]} ${PROPS["my"]} click 1
+                    TOTP_ANSWER=$(oathtool --totp -b "$TOTP_KEY")
+                    sleep 0.25
+                    xdotool type $TOTP_ANSWER
+                    _info "    TOTP answer entered\n"
+                    sleep 0.25
+                    ACCEPT_OTP=1
+                fi
+                if  [ "${PROPS['F1']}" == "javax.swing.JButton" ] && \
+                    [ "${PROPS['text']}" == "OK" ] &&
+                    [ "$ACCEPT_OTP" == 1 ]; then
+                    xdotool mousemove ${PROPS["mx"]} ${PROPS["my"]} click 1
+                    _info "    TOTP OK clicked\n"
+                fi
+            done
         fi
     fi
 }
@@ -925,6 +990,7 @@ function _maintenance_cycle {
             __maintenance_handle_login_failed
         fi
         __maintenance_handle_passkey
+        __maintenance_handle_totp
         if [ $G_PAPER_TRADING_WARNING_DONE -lt 2 ]; then
             __maintenance_handle_paper_trading_warning
         fi
